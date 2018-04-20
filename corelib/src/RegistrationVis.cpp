@@ -301,10 +301,21 @@ Transform RegistrationVis::computeTransformationImpl(
 			kptsFrom.resize(fromSignature.getWords().size());
 			orignalWordsFromIds.resize(fromSignature.getWords().size());
 			int i=0;
+			bool allUniques = true;
 			for(std::multimap<int, cv::KeyPoint>::const_iterator iter=fromSignature.getWords().begin(); iter!=fromSignature.getWords().end(); ++iter)
 			{
 				kptsFrom[i] = iter->second;
-				orignalWordsFromIds[i++] = iter->first;
+				orignalWordsFromIds[i] = iter->first;
+				if(i>0 && iter->first==orignalWordsFromIds[i-1])
+				{
+					allUniques = false;
+				}
+				++i;
+			}
+			if(!allUniques)
+			{
+				UDEBUG("IDs are not unique, IDs will be regenerated!");
+				orignalWordsFromIds.clear();
 			}
 		}
 
@@ -1034,7 +1045,7 @@ Transform RegistrationVis::computeTransformationImpl(
 	// Motion estimation
 	/////////////////////
 	Transform transform;
-	float variance = 1.0f;
+	cv::Mat covariance = cv::Mat::eye(6,6,CV_64FC1);
 	int inliersCount = 0;
 	int matchesCount = 0;
 	if(toSignature.getWords().size())
@@ -1042,7 +1053,9 @@ Transform RegistrationVis::computeTransformationImpl(
 		Transform transforms[2];
 		std::vector<int> inliers[2];
 		std::vector<int> matches[2];
-		double variances[2] = {1.0f};
+		cv::Mat covariances[2];
+		covariances[0] = cv::Mat::eye(6,6,CV_64FC1);
+		covariances[1] = cv::Mat::eye(6,6,CV_64FC1);
 		for(int dir=0; dir<(!_forwardEstimateOnly?2:1); ++dir)
 		{
 			// A to B
@@ -1075,6 +1088,7 @@ Transform RegistrationVis::computeTransformationImpl(
 
 					// we only need the camera transform, send guess words3 for scale estimation
 					Transform cameraTransform;
+					double variance = 1.0f;
 					std::map<int, cv::Point3f> inliers3D = util3d::generateWords3DMono(
 							uMultimapToMapUnique(signatureA->getWords()),
 							uMultimapToMapUnique(signatureB->getWords()),
@@ -1087,21 +1101,21 @@ Transform RegistrationVis::computeTransformationImpl(
 							1.0f,
 							0.99f,
 							uMultimapToMapUnique(signatureA->getWords3()), // for scale estimation
-							&variances[dir]);
-
+							&variance);
+					covariances[dir] *= variance;
 					inliers[dir] = uKeys(inliers3D);
 
 					if(!cameraTransform.isNull())
 					{
 						if((int)inliers3D.size() >= _minInliers)
 						{
-							if(variances[dir] <= _epipolarGeometryVar)
+							if(variance <= _epipolarGeometryVar)
 							{
 								transforms[dir] = cameraTransform;
 							}
 							else
 							{
-								msg = uFormat("Variance is too high! (max inlier distance=%f, variance=%f)", _epipolarGeometryVar, variances[dir]);
+								msg = uFormat("Variance is too high! (max inlier distance=%f, variance=%f)", _epipolarGeometryVar, variance);
 								UINFO(msg.c_str());
 							}
 						}
@@ -1164,7 +1178,7 @@ Transform RegistrationVis::computeTransformationImpl(
 								_PnPRefineIterations,
 								dir==0?(!guess.isNull()?guess:Transform::getIdentity()):!transforms[0].isNull()?transforms[0].inverse():(!guess.isNull()?guess.inverse():Transform::getIdentity()),
 								uMultimapToMapUnique(signatureB->getWords3()),
-								varianceFromInliersCount()?0:&variances[dir],
+								varianceFromInliersCount()?0:&covariances[dir],
 								&matchesV,
 								&inliersV);
 						inliers[dir] = inliersV;
@@ -1201,15 +1215,15 @@ Transform RegistrationVis::computeTransformationImpl(
 							_inlierDistance,
 							_iterations,
 							_refineIterations,
-							&variances[dir],
+							&covariances[dir],
 							&matchesV,
 							&inliersV);
 					inliers[dir] = inliersV;
 					matches[dir] = matchesV;
 					if(transforms[dir].isNull())
 					{
-						msg = uFormat("Not enough inliers %d/%d between %d and %d",
-								(int)inliers[dir].size(), _minInliers, signatureA->id(), signatureB->id());
+						msg = uFormat("Not enough inliers %d/%d (matches=%d) between %d and %d",
+								(int)inliers[dir].size(), _minInliers, (int)matches[dir].size(), signatureA->id(), signatureB->id());
 						UINFO(msg.c_str());
 					}
 				}
@@ -1220,6 +1234,20 @@ Transform RegistrationVis::computeTransformationImpl(
 					UINFO(msg.c_str());
 				}
 			}
+
+			double epsilon = 0.000001;
+			if(covariances[dir].at<double>(0,0)<=epsilon)
+				covariances[dir].at<double>(0,0) = epsilon; // epsilon if exact transform
+			if(covariances[dir].at<double>(1,1)<=epsilon)
+				covariances[dir].at<double>(1,1) = epsilon; // epsilon if exact transform
+			if(covariances[dir].at<double>(2,2)<=epsilon)
+				covariances[dir].at<double>(2,2) = epsilon; // epsilon if exact transform
+			if(covariances[dir].at<double>(3,3)<=epsilon)
+				covariances[dir].at<double>(3,3) = epsilon; // epsilon if exact transform
+			if(covariances[dir].at<double>(4,4)<=epsilon)
+				covariances[dir].at<double>(4,4) = epsilon; // epsilon if exact transform
+			if(covariances[dir].at<double>(5,5)<=epsilon)
+				covariances[dir].at<double>(5,5) = epsilon; // epsilon if exact transform
 		}
 
 		if(!_forwardEstimateOnly)
@@ -1277,10 +1305,15 @@ Transform RegistrationVis::computeTransformationImpl(
 			poses.insert(std::make_pair(1, Transform::getIdentity()));
 			poses.insert(std::make_pair(2, transforms[0]));
 
-			links.insert(std::make_pair(1, Link(1, 2, Link::kNeighbor, transforms[0], variances[0], variances[0])));
+			cv::Mat cov = covariances[0].clone();
+			normalizeCovariance(cov, transforms[0]);
+
+			links.insert(std::make_pair(1, Link(1, 2, Link::kNeighbor, transforms[0], cov.inv())));
 			if(!transforms[1].isNull() && inliers[1].size())
 			{
-				links.insert(std::make_pair(2, Link(2, 1, Link::kNeighbor, transforms[1], variances[1], variances[1])));
+				cov = covariances[1].clone();
+				normalizeCovariance(cov, transforms[1]);
+				links.insert(std::make_pair(2, Link(2, 1, Link::kNeighbor, transforms[1], cov.inv())));
 			}
 
 			std::map<int, Transform> optimizedPoses;
@@ -1411,18 +1444,18 @@ Transform RegistrationVis::computeTransformationImpl(
 			if(transforms[0].isNull())
 			{
 				transform = transforms[1];
-				variance = variances[1];
+				covariance = covariances[1];
 			}
 			else
 			{
 				transform = transforms[0].interpolate(0.5f, transforms[1]);
-				variance = (variances[0]+variances[1])/2.0f;
+				covariance = (covariances[0]+covariances[1])/2.0f;
 			}
 		}
 		else
 		{
 			transform = transforms[0];
-			variance = variances[0];
+			covariance = covariances[0];
 		}
 	}
 	else if(toSignature.sensorData().isValid())
@@ -1436,8 +1469,7 @@ Transform RegistrationVis::computeTransformationImpl(
 	info.inliers = inliersCount;
 	info.matches = matchesCount;
 	info.rejectedMsg = msg;
-	info.varianceLin = variance>0.0f?variance:0.0001f; // epsilon if exact transform
-	info.varianceAng = info.varianceLin;
+	info.covariance = covariance;
 
 	UDEBUG("transform=%s", transform.prettyPrint().c_str());
 	return transform;

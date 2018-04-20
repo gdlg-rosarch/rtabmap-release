@@ -131,7 +131,7 @@ public:
 
 	rtabmap::ParametersMap getAllParameters() const;
 	std::string getParameter(const std::string & key) const;
-	void updateParameters(const ParametersMap & parameters);
+	void updateParameters(const ParametersMap & parameters, bool setOtherParametersToDefault = false);
 
 	//General panel
 	int getGeneralLoggerLevel() const;
@@ -149,27 +149,37 @@ public:
 	bool isCacheSavedInFigures() const;
 	bool notifyWhenNewGlobalPathIsReceived() const;
 	int getOdomQualityWarnThr() const;
+	bool isOdomOnlyInliersShown() const;
 	bool isPosteriorGraphView() const;
 	int getOdomRegistrationApproach() const;
 	bool isOdomDisabled() const;
 	bool isGroundTruthAligned() const;
 
 	bool isGraphsShown() const;
+	bool isFrustumsShown() const;
 	bool isLabelsShown() const;
-	double getMapVoxel() const;
-	double getMapNoiseRadius() const;
-	int getMapNoiseMinNeighbors() const;
+	double getVoxel() const;
+	double getNoiseRadius() const;
+	int getNoiseMinNeighbors() const;
+	double getCeilingFilteringHeight() const;
+	double getFloorFilteringHeight() const;
+	int getNormalKSearch() const;
+	double getScanCeilingFilteringHeight() const;
+	double getScanFloorFilteringHeight() const;
+	int getScanNormalKSearch() const;
 	bool isCloudsShown(int index) const;      // 0=map, 1=odom
 	bool isOctomapUpdated() const;
 	bool isOctomapShown() const;
 	bool isOctomapCubeRendering() const;
 	bool isOctomap2dGrid() const;
 	int getOctomapTreeDepth() const;
-	bool isOctomapGroundAnObstacle() const;
+	bool isOctomapFullUpdate() const;
 	double getOctomapOccupancyThr() const;
+	int getOctomapPointSize() const;
 	int getCloudDecimation(int index) const;   // 0=map, 1=odom
 	double getCloudMaxDepth(int index) const;  // 0=map, 1=odom
 	double getCloudMinDepth(int index) const;  // 0=map, 1=odom
+	std::vector<float> getCloudRoiRatios(int index) const; // 0=map, 1=odom
 	double getCloudOpacity(int index) const;   // 0=map, 1=odom
 	int getCloudPointSize(int index) const;    // 0=map, 1=odom
 
@@ -189,14 +199,9 @@ public:
 	int getSubtractFilteringMinPts() const;
 	double getSubtractFilteringRadius() const;
 	double getSubtractFilteringAngle() const;
-	int getNormalKSearch() const;
-	bool gainCompensation() const;
 
 	bool getGridMapShown() const;
 	double getGridMapResolution() const;;
-	bool isGridMapEroded() const;
-	bool isGridMapIncremental() const;
-	double getGridMapFootprintRadius() const;
 	bool isGridMapFrom3DCloud() const;
 	bool projMapFrame() const;
 	double projMaxGroundAngle() const;
@@ -293,11 +298,14 @@ private slots:
 	void addParameter(double value);
 	void addParameter(const QString & value);
 	void updatePredictionPlot();
+	void updateOdometryVisibility();
 	void updateKpROI();
 	void updateStereoDisparityVisibility();
 	void useOdomFeatures();
+	void useGridProjRayTracing();
 	void changeWorkingDirectory();
 	void changeDictionaryPath();
+	void changeOdometryORBSLAM2Vocabulary();
 	void readSettingsEnd();
 	void setupTreeView();
 	void updateBasicParameter();
@@ -380,6 +388,7 @@ private:
 	QVector<QSpinBox*> _3dRenderingDecimation;
 	QVector<QDoubleSpinBox*> _3dRenderingMaxDepth;
 	QVector<QDoubleSpinBox*> _3dRenderingMinDepth;
+	QVector<QLineEdit*> _3dRenderingRoiRatios;
 	QVector<QDoubleSpinBox*> _3dRenderingOpacity;
 	QVector<QSpinBox*> _3dRenderingPtSize;
 	QVector<QCheckBox*> _3dRenderingShowScans;

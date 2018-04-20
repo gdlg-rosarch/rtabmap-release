@@ -50,7 +50,6 @@
     <addaction name="actionSave_GUI_config"/>
     <addaction name="separator"/>
     <addaction name="actionSave_point_cloud"/>
-    <addaction name="actionExport_2D_scans_ply_pcd"/>
     <addaction name="actionExport_2D_Grid_map_bmp_png"/>
     <addaction name="actionExport_octomap"/>
     <addaction name="menuExport_poses"/>
@@ -83,7 +82,6 @@
     <addaction name="actionClear_cache"/>
     <addaction name="separator"/>
     <addaction name="actionView_high_res_point_cloud"/>
-    <addaction name="actionView_scans"/>
     <addaction name="separator"/>
     <addaction name="actionDelete_memory"/>
     <addaction name="separator"/>
@@ -176,13 +174,24 @@
         <iconset resource="../GuiLib.qrc">
          <normaloff>:/images/r200.png</normaloff>:/images/r200.png</iconset>
        </property>
-       <addaction name="actionRealSense"/>
+       <addaction name="actionRealSense_R200"/>
+      </widget>
+      <widget class="QMenu" name="menuRealSense_ZR300">
+       <property name="title">
+        <string>RealSense ZR300</string>
+       </property>
+       <property name="icon">
+        <iconset resource="../GuiLib.qrc">
+         <normaloff>:/images/zr300.png</normaloff>:/images/zr300.png</iconset>
+       </property>
+       <addaction name="actionRealSense_ZR300"/>
       </widget>
       <addaction name="menuKinect_for_Xbox_360"/>
       <addaction name="menuXtion_PRO_LIVE"/>
       <addaction name="menuSense_3D_scanner"/>
       <addaction name="menuKinect_v2"/>
       <addaction name="menuRealSense_R200"/>
+      <addaction name="menuRealSense_ZR300"/>
      </widget>
      <widget class="QMenu" name="menuStereo_camera">
       <property name="title">
@@ -1063,7 +1072,7 @@
   </action>
   <action name="actionView_high_res_point_cloud">
    <property name="text">
-    <string>View high-res point clouds...</string>
+    <string>View point clouds...</string>
    </property>
   </action>
   <action name="actionTrigger_a_new_map">
@@ -1137,16 +1146,6 @@
   <action name="actionExport_2D_Grid_map_bmp_png">
    <property name="text">
     <string>Export 2D grid map (*.png *.bmp)...</string>
-   </property>
-  </action>
-  <action name="actionExport_2D_scans_ply_pcd">
-   <property name="text">
-    <string>Export 2D-3D scans (*.ply *.pcd)...</string>
-   </property>
-  </action>
-  <action name="actionView_scans">
-   <property name="text">
-    <string>View scans...</string>
    </property>
   </action>
   <action name="actionOpen_database">
@@ -1338,7 +1337,7 @@
     <string>Export octomap...</string>
    </property>
   </action>
-  <action name="actionRealSense">
+  <action name="actionRealSense_R200">
    <property name="checkable">
     <bool>true</bool>
    </property>
@@ -1349,6 +1348,14 @@
   <action name="actionDepth_Calibration">
    <property name="text">
     <string>Depth calibration...</string>
+   </property>
+  </action>
+  <action name="actionRealSense_ZR300">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="text">
+    <string>RealSense</string>
    </property>
   </action>
  </widget>

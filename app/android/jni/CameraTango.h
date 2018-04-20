@@ -36,6 +36,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <rtabmap/utilite/UEvent.h>
 #include <rtabmap/utilite/UTimer.h>
 #include <boost/thread/mutex.hpp>
+#include <tango_support_api.h>
 
 class TangoPoseData;
 
@@ -70,7 +71,11 @@ private:
 
 class CameraTango : public Camera, public UThread, public UEventsSender {
 public:
-	CameraTango(int decimation, bool autoExposure);
+	static const float bilateralFilteringSigmaS;
+	static const float bilateralFilteringSigmaR;
+
+public:
+	CameraTango(bool colorCamera, int decimation, bool publishRawScan, bool smoothing);
 	virtual ~CameraTango();
 
 	virtual bool init(const std::string & calibrationFolder = ".", const std::string & cameraName = "");
@@ -79,8 +84,11 @@ public:
 	virtual std::string getSerial() const;
 	const CameraModel & getCameraModel() const {return model_;}
 	rtabmap::Transform tangoPoseToTransform(const TangoPoseData * tangoPose) const;
+	void setColorCamera(bool enabled) {if(!this->isRunning()) colorCamera_ = enabled;}
 	void setDecimation(int value) {decimation_ = value;}
-	void setAutoExposure(bool enabled) {autoExposure_ = enabled;}
+	void setSmoothing(bool enabled) {smoothing_ = enabled;}
+	void setRawScanPublished(bool enabled) {rawScanPublished_ = enabled;}
+	void setScreenRotation(TangoSupportRotation colorCameraToDisplayRotation) {colorCameraToDisplayRotation_ = colorCameraToDisplayRotation;}
 
 	void cloudReceived(const cv::Mat & cloud, double timestamp);
 	void rgbReceived(const cv::Mat & tangoImage, int type, double timestamp);
@@ -98,10 +106,14 @@ private:
 
 private:
 	void * tango_config_;
-	bool firstFrame_;
+	Transform previousPose_;
+	double previousStamp_;
 	UTimer cameraStartedTime_;
+	double stampEpochOffset_;
+	bool colorCamera_;
 	int decimation_;
-	bool autoExposure_;
+	bool rawScanPublished_;
+	bool smoothing_;
 	cv::Mat cloud_;
 	double cloudStamp_;
 	cv::Mat tangoColor_;
@@ -111,6 +123,9 @@ private:
 	USemaphore dataReady_;
 	CameraModel model_;
 	Transform deviceTColorCamera_;
+	TangoSupportRotation colorCameraToDisplayRotation_;
+	cv::Mat fisheyeRectifyMapX_;
+	cv::Mat fisheyeRectifyMapY_;
 };
 
 } /* namespace rtabmap */

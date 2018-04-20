@@ -67,7 +67,6 @@ class StatsToolBox;
 class ProgressDialog;
 class TwistGridWidget;
 class ExportCloudsDialog;
-class ExportScansDialog;
 class PostProcessingDialog;
 class DepthCalibrationDialog;
 class DataRecorder;
@@ -114,10 +113,11 @@ public slots:
 
 protected:
 	virtual void closeEvent(QCloseEvent* event);
-	virtual void handleEvent(UEvent* anEvent);
+	virtual bool handleEvent(UEvent* anEvent);
 	virtual void showEvent(QShowEvent* anEvent);
 	virtual void moveEvent(QMoveEvent* anEvent);
 	virtual void resizeEvent(QResizeEvent* anEvent);
+	virtual void keyPressEvent(QKeyEvent *event);
 	virtual bool eventFilter(QObject *obj, QEvent *event);
 
 private slots:
@@ -202,10 +202,8 @@ private slots:
 	void setAspectRatio1080p();
 	void setAspectRatioCustom();
 	void exportGridMap();
-	void exportScans();
 	void exportClouds();
 	void exportBundlerFormat();
-	void viewScans();
 	void viewClouds();
 	void resetOdometry();
 	void triggerNewMap();
@@ -241,7 +239,8 @@ private:
 			const std::map<int, int> & mapIds,
 			const std::map<int, std::string> & labels,
 			const std::map<int, Transform> & groundTruths,
-			bool verboseProgress = false);
+			bool verboseProgress = false,
+			std::map<std::string, float> * stats = 0);
 	std::pair<pcl::PointCloud<pcl::PointXYZRGB>::Ptr, pcl::IndicesPtr> createAndAddCloudToMap(int nodeId,	const Transform & pose, int mapId);
 	void createAndAddScanToMap(int nodeId, const Transform & pose, int mapId);
 	void createAndAddFeaturesToMap(int nodeId, const Transform & pose, int mapId);
@@ -266,7 +265,6 @@ private:
 	PreferencesDialog * _preferencesDialog;
 	AboutDialog * _aboutDialog;
 	ExportCloudsDialog * _exportCloudsDialog;
-	ExportScansDialog * _exportScansDialog;
 	PostProcessingDialog * _postProcessingDialog;
 	DepthCalibrationDialog * _depthCalibrationDialog;
 	DataRecorder * _dataRecorder;
@@ -296,12 +294,10 @@ private:
 	std::map<int, std::string> _currentLabels; // <nodeId, label>
 	std::map<int, std::pair<pcl::PointCloud<pcl::PointXYZRGB>::Ptr, pcl::IndicesPtr> > _cachedClouds;
 	long _createdCloudsMemoryUsage;
+	std::set<int> _cachedEmptyClouds;
 	std::pair<int, std::pair<std::pair<pcl::PointCloud<pcl::PointXYZRGB>::Ptr, pcl::PointCloud<pcl::PointXYZRGBNormal>::Ptr>, pcl::IndicesPtr> > _previousCloud; // used for subtraction
 
 	std::map<int, cv::Mat> _createdScans;
-	std::map<int, std::pair<cv::Mat, cv::Mat> > _gridLocalMaps; // <ground, obstacles>
-	std::map<int, cv::Point3f> _gridViewPoints;
-	long _cachedGridsMemoryUsage;
 
 	rtabmap::OccupancyGrid * _occupancyGrid;
 	rtabmap::OctoMap * _octomap;
@@ -326,6 +322,7 @@ private:
 	LoopClosureViewer * _loopClosureViewer;
 
 	QString _graphSavingFileName;
+	bool _exportPosesFrame;
 	QMap<int, QString> _exportPosesFileName;
 	bool _autoScreenCaptureOdomSync;
 	bool _autoScreenCaptureRAM;

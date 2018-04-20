@@ -60,6 +60,10 @@ SET(SRC_FILES
 	OdometryF2M.cpp
 	OdometryMono.cpp
 	OdometryF2F.cpp
+	OdometryFovis.cpp
+	OdometryViso2.cpp
+	OdometryDVO.cpp
+	OdometryORBSLAM2.cpp
 	
 	Stereo.cpp
 	StereoDense.cpp
@@ -221,6 +225,7 @@ IF(GTSAM_FOUND)
 			${INCLUDE_DIRS} 
 		)
 	ENDIF()
+	add_definitions("-DGTSAM_IMPORT_STATIC")
 	SET(LIBRARIES
 		${LIBRARIES}
 		gtsam
@@ -274,6 +279,50 @@ IF(OCTOMAP_FOUND)
 	)
 ENDIF(OCTOMAP_FOUND)
 
+IF(libfovis_FOUND)
+    SET(INCLUDE_DIRS
+		${INCLUDE_DIRS}
+		${libfovis_INCLUDE_DIRS}
+	)
+	SET(LIBRARIES
+		${LIBRARIES}
+		${libfovis_LIBRARIES}
+	)
+ENDIF(libfovis_FOUND)
+
+IF(libviso2_FOUND)
+    SET(INCLUDE_DIRS
+		${INCLUDE_DIRS}
+		${libviso2_INCLUDE_DIRS}
+	)
+	SET(LIBRARIES
+		${LIBRARIES}
+		${libviso2_LIBRARIES}
+	)
+ENDIF(libviso2_FOUND)
+
+IF(dvo_core_FOUND)
+    SET(INCLUDE_DIRS
+		${INCLUDE_DIRS}
+		${dvo_core_INCLUDE_DIRS}
+	)
+	SET(LIBRARIES
+		${LIBRARIES}
+		${dvo_core_LIBRARIES}
+	)
+ENDIF(dvo_core_FOUND)
+
+IF(ORB_SLAM2_FOUND)
+    SET(INCLUDE_DIRS
+		${INCLUDE_DIRS}
+		${ORB_SLAM2_INCLUDE_DIRS}
+	)
+	SET(LIBRARIES
+		${LIBRARIES}
+		${ORB_SLAM2_LIBRARIES}
+	)
+ENDIF(ORB_SLAM2_FOUND)
+
 ####################################
 # Generate resources files
 ####################################
@@ -295,7 +344,7 @@ SET(RESOURCES_HEADERS
 IF(ANDROID)
 
    IF(NOT RTABMAP_RES_TOOL)
-      find_host_program(RTABMAP_RES_TOOL rtabmap-res_tool)
+      find_host_program(RTABMAP_RES_TOOL rtabmap-res_tool PATHS ${CMAKE_RUNTIME_OUTPUT_DIRECTORY})
       IF(NOT RTABMAP_RES_TOOL)
          MESSAGE( FATAL_ERROR "RTABMAP_RES_TOOL is not defined (it is the path to \"rtabmap-res_tool\" application created by a non-Android build)." )
       ENDIF(NOT RTABMAP_RES_TOOL)

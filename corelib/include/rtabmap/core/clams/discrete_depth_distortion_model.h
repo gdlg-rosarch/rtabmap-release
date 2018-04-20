@@ -32,6 +32,7 @@ RTAB-Map integration: Mathieu Labbe
 
 #include <assert.h>
 #include <vector>
+#include <set>
 #include <Eigen/Core>
 #include <opencv2/opencv.hpp>
 #include <rtabmap/utilite/UMutex.h>
@@ -42,7 +43,7 @@ namespace clams
   class RTABMAP_EXP DiscreteFrustum
   {
   public:
-    DiscreteFrustum(int smoothing = 1, double bin_depth = 1.0);
+    DiscreteFrustum(int smoothing = 1, double bin_depth = 1.0, double max_dist = 10.0);
     //! z value, not distance to origin.
     //! thread-safe.
     void addExample(double ground_truth, double measurement);
@@ -67,6 +68,16 @@ namespace clams
   class RTABMAP_EXP DiscreteDepthDistortionModel
   {
   public:
+    // returns all divisors of num
+    static std::set<size_t> getDivisors(const size_t &num);
+
+    // returns divisor from divisors closest to ref
+    static size_t getClosestToRef(const std::set<size_t> &divisors, const double &ref);
+
+    // sets bin_width and bin_height to appropriate values
+    static void getBinSize(const size_t &width, const size_t &height, size_t &bin_width, size_t &bin_height);
+
+  public:
     DiscreteDepthDistortionModel() :
     	width_(0),
 		height_(0),
@@ -78,7 +89,7 @@ namespace clams
 		training_samples_(0)
     {}
     virtual ~DiscreteDepthDistortionModel();
-    DiscreteDepthDistortionModel(int width, int height, int bin_width = 8, int bin_height = 6, double bin_depth = 2.0, int smoothing = 1);
+    DiscreteDepthDistortionModel(int width, int height, int bin_width = 8, int bin_height = 6, double bin_depth = 2.0, int smoothing = 1, double max_depth = 10.0);
     DiscreteDepthDistortionModel(const DiscreteDepthDistortionModel& other);
     DiscreteDepthDistortionModel& operator=(const DiscreteDepthDistortionModel& other);
     void undistort(cv::Mat & depth) const;

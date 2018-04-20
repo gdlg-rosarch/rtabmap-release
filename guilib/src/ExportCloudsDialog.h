@@ -46,6 +46,8 @@ class QAbstractButton;
 
 namespace rtabmap {
 class ProgressDialog;
+class GainCompensator;
+class DBDriver;
 
 class ExportCloudsDialog : public QDialog
 {
@@ -59,12 +61,15 @@ public:
 	void saveSettings(QSettings & settings, const QString & group = "") const;
 	void loadSettings(QSettings & settings, const QString & group = "");
 
+	void setDBDriver(const DBDriver * dbDriver) {_dbDriver = dbDriver;}
+
 	void exportClouds(
 			const std::map<int, Transform> & poses,
 			const std::multimap<int, Link> & links,
 			const std::map<int, int> & mapIds,
 			const QMap<int, Signature> & cachedSignatures,
 			const std::map<int, std::pair<pcl::PointCloud<pcl::PointXYZRGB>::Ptr, pcl::IndicesPtr> > & cachedClouds,
+			const std::map<int, cv::Mat> & cachedScans,
 			const QString & workingDirectory,
 			const ParametersMap & parameters);
 
@@ -74,6 +79,7 @@ public:
 			const std::map<int, int> & mapIds,
 			const QMap<int, Signature> & cachedSignatures,
 			const std::map<int, std::pair<pcl::PointCloud<pcl::PointXYZRGB>::Ptr, pcl::IndicesPtr> > & cachedClouds,
+			const std::map<int, cv::Mat> & cachedScans,
 			const QString & workingDirectory,
 			const ParametersMap & parameters);
 
@@ -89,7 +95,6 @@ private slots:
 	void updateReconstructionFlavor();
 	void selectDistortionModel();
 	void updateMLSGrpVisibility();
-	void updateTexturingAvailability();
 	void cancel();
 
 private:
@@ -97,32 +102,36 @@ private:
 			const std::map<int, Transform> & poses,
 			const QMap<int, Signature> & cachedSignatures,
 			const std::map<int, std::pair<pcl::PointCloud<pcl::PointXYZRGB>::Ptr, pcl::IndicesPtr> > & cachedClouds,
-			const ParametersMap & parameters) const;
+			const std::map<int, cv::Mat> & cachedScans,
+			const ParametersMap & parameters,
+			bool & has2dScans) const;
 	bool getExportedClouds(
 				const std::map<int, Transform> & poses,
 				const std::multimap<int, Link> & links,
 				const std::map<int, int> & mapIds,
 				const QMap<int, Signature> & cachedSignatures,
 				const std::map<int, std::pair<pcl::PointCloud<pcl::PointXYZRGB>::Ptr, pcl::IndicesPtr> > & cachedClouds,
+				const std::map<int, cv::Mat> & cachedScans,
 				const QString & workingDirectory,
 				const ParametersMap & parameters,
 				std::map<int, pcl::PointCloud<pcl::PointXYZRGBNormal>::Ptr> & clouds,
 				std::map<int, pcl::PolygonMesh::Ptr> & meshes,
-				std::map<int, pcl::TextureMesh::Ptr> & textureMeshes);
+				std::map<int, pcl::TextureMesh::Ptr> & textureMeshes,
+				std::vector<std::map<int, pcl::PointXY> > & textureVertexToPixels);
 	void saveClouds(const QString & workingDirectory, const std::map<int, Transform> & poses, const std::map<int, pcl::PointCloud<pcl::PointXYZRGBNormal>::Ptr> & clouds, bool binaryMode = true);
 	void saveMeshes(const QString & workingDirectory, const std::map<int, Transform> & poses, const std::map<int, pcl::PolygonMesh::Ptr> & meshes, bool binaryMode = true);
-	void saveTextureMeshes(const QString & workingDirectory, const std::map<int, Transform> & poses, const std::map<int, pcl::TextureMesh::Ptr> & meshes);
+	void saveTextureMeshes(const QString & workingDirectory, const std::map<int, Transform> & poses, std::map<int, pcl::TextureMesh::Ptr> & textureMeshes, const QMap<int, Signature> & cachedSignatures, const std::vector<std::map<int, pcl::PointXY> > & textureVertexToPixels);
 
 	void setSaveButton();
 	void setOkButton();
-	void enableRegeneration(bool enabled);
-	void updateTexturingAvailability(bool isExporting);
 
 private:
 	Ui_ExportCloudsDialog * _ui;
 	ProgressDialog * _progressDialog;
 	QString _workingDirectory;
 	bool _canceled;
+	GainCompensator * _compensator;
+	const DBDriver * _dbDriver;
 };
 
 }

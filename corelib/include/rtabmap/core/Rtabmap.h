@@ -34,6 +34,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "rtabmap/core/SensorData.h"
 #include "rtabmap/core/Statistics.h"
 #include "rtabmap/core/Link.h"
+#include "rtabmap/core/ProgressState.h"
 
 #include <opencv2/core/core.hpp>
 #include <list>
@@ -58,11 +59,32 @@ public:
 	Rtabmap();
 	virtual ~Rtabmap();
 
-	bool process(const cv::Mat & image, int id=0); // for convenience, an id is automatically generated if id=0
+	/**
+	 * @brief Main loop of rtabmap.
+	 * @param data Sensor data to process.
+	 * @param odomPose Odometry pose, should be non-null for RGB-D SLAM mode.
+	 * @param covariance Odometry covariance.
+	 * @param externalStats External statistics to be saved in the database for convenience
+	 * @return true if data has been added to map.
+	 */
 	bool process(
 			const SensorData & data,
 			Transform odomPose,
-			const cv::Mat & covariance = cv::Mat::eye(6,6,CV_64FC1)); // for convenience
+			const cv::Mat & odomCovariance = cv::Mat::eye(6,6,CV_64FC1),
+			const std::vector<float> & odomVelocity = std::vector<float>(),
+			const std::map<std::string, float> & externalStats = std::map<std::string, float>());
+	// for convenience
+	bool process(
+			const SensorData & data,
+			Transform odomPose,
+			float odomLinearVariance,
+			float odomAngularVariance,
+			const std::vector<float> & odomVelocity = std::vector<float>(),
+			const std::map<std::string, float> & externalStats = std::map<std::string, float>());
+	// for convenience, loop closure detection only
+	bool process(
+			const cv::Mat & image,
+			int id=0, const std::map<std::string, float> & externalStats = std::map<std::string, float>());
 
 	void init(const ParametersMap & parameters, const std::string & databasePath = "");
 	void init(const std::string & configFile = "", const std::string & databasePath = "");
@@ -141,7 +163,7 @@ public:
 			bool optimized,
 			bool global,
 			std::map<int, Signature> * signatures = 0);
-	int detectMoreLoopClosures(float clusterRadius = 0.5f, float clusterAngle = M_PI/6.0f, int iterations = 1);
+	int detectMoreLoopClosures(float clusterRadius = 0.5f, float clusterAngle = M_PI/6.0f, int iterations = 1, const ProgressState * state = 0);
 	int refineLinks();
 
 	int getPathStatus() const {return _pathStatus;} // -1=failed 0=idle/executing 1=success
@@ -193,6 +215,7 @@ private:
 	unsigned int _maxMemoryAllowed; // signatures count in WM
 	float _loopThr;
 	float _loopRatio;
+	bool _verifyLoopClosureHypothesis;
 	unsigned int _maxRetrieved;
 	unsigned int _maxLocalRetrieved;
 	bool _rawDataKept;

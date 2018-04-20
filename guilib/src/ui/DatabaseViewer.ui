@@ -6,7 +6,7 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>1285</width>
+    <width>1547</width>
     <height>965</height>
    </rect>
   </property>
@@ -52,7 +52,7 @@
           <rect>
            <x>0</x>
            <y>0</y>
-           <width>253</width>
+           <width>408</width>
            <height>208</height>
           </rect>
          </property>
@@ -210,7 +210,7 @@
           <rect>
            <x>0</x>
            <y>0</y>
-           <width>253</width>
+           <width>408</width>
            <height>208</height>
           </rect>
          </property>
@@ -483,7 +483,7 @@
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>1285</width>
+     <width>1547</width>
      <height>22</height>
     </rect>
    </property>
@@ -491,14 +491,24 @@
     <property name="title">
      <string>File</string>
     </property>
+    <widget class="QMenu" name="menuExport_poses">
+     <property name="title">
+      <string>Export poses...</string>
+     </property>
+     <addaction name="actionRaw_format_txt"/>
+     <addaction name="actionRGBD_SLAM_format_txt"/>
+     <addaction name="actionKITTI_format_txt"/>
+     <addaction name="actionTORO_graph"/>
+     <addaction name="actionG2o_g2o"/>
+    </widget>
     <addaction name="actionOpen_database"/>
     <addaction name="separator"/>
     <addaction name="actionSave_config"/>
     <addaction name="separator"/>
     <addaction name="actionGenerate_3D_map_pcd"/>
-    <addaction name="actionExport_3D_laser_scans_ply_pcd"/>
     <addaction name="actionExport"/>
     <addaction name="actionExtract_images"/>
+    <addaction name="menuExport_poses"/>
     <addaction name="separator"/>
     <addaction name="actionQuit"/>
    </widget>
@@ -508,8 +518,6 @@
     </property>
     <addaction name="actionGenerate_graph_dot"/>
     <addaction name="actionGenerate_local_graph_dot"/>
-    <addaction name="actionGenerate_TORO_graph_graph"/>
-    <addaction name="actionGenerate_g2o_graph_g2o"/>
     <addaction name="separator"/>
     <addaction name="actionDetect_more_loop_closures"/>
     <addaction name="actionRefine_all_neighbor_links"/>
@@ -518,15 +526,18 @@
     <addaction name="actionRegenerate_local_grid_maps"/>
     <addaction name="actionRegenerate_local_grid_maps_selected"/>
     <addaction name="separator"/>
+    <addaction name="actionEdit_depth_image"/>
+    <addaction name="separator"/>
     <addaction name="actionReset_all_changes"/>
+    <addaction name="actionRestore_default_GUI_settings"/>
     <addaction name="separator"/>
     <addaction name="actionView_3D_map"/>
-    <addaction name="actionView_3D_laser_scans"/>
    </widget>
    <widget class="QMenu" name="menuView">
     <property name="title">
      <string>View</string>
     </property>
+    <addaction name="actionVertical_Layout"/>
    </widget>
    <addaction name="menuFile"/>
    <addaction name="menuEdit"/>
@@ -583,7 +594,7 @@
           <string>Odom Frame</string>
          </property>
          <property name="checked">
-          <bool>false</bool>
+          <bool>true</bool>
          </property>
         </widget>
        </item>
@@ -912,6 +923,26 @@
          </property>
         </widget>
        </item>
+       <item row="1" column="1">
+        <widget class="QLabel" name="label_alignPosesWithGroundTruth">
+         <property name="text">
+          <string>Align poses with ground truth</string>
+         </property>
+         <property name="wordWrap">
+          <bool>true</bool>
+         </property>
+        </widget>
+       </item>
+       <item row="1" column="0">
+        <widget class="QCheckBox" name="checkBox_alignPosesWithGroundTruth">
+         <property name="text">
+          <string/>
+         </property>
+         <property name="checked">
+          <bool>true</bool>
+         </property>
+        </widget>
+       </item>
       </layout>
      </item>
     </layout>
@@ -932,23 +963,12 @@
    </attribute>
    <widget class="QWidget" name="dockWidgetContents_3">
     <layout class="QVBoxLayout" name="verticalLayout_10">
+     <property name="margin">
+      <number>0</number>
+     </property>
      <item>
-      <layout class="QGridLayout" name="gridLayout_4">
-       <item row="1" column="2">
-        <widget class="QLabel" name="label_logger_level_2">
-         <property name="text">
-          <string>Vertical layout</string>
-         </property>
-        </widget>
-       </item>
-       <item row="0" column="2">
-        <widget class="QLabel" name="label_logger_level">
-         <property name="text">
-          <string>Logger level</string>
-         </property>
-        </widget>
-       </item>
-       <item row="0" column="1">
+      <layout class="QGridLayout" name="gridLayout_4" columnstretch="0,1">
+       <item row="0" column="0">
         <widget class="QComboBox" name="comboBox_logger_level">
          <property name="currentIndex">
           <number>1</number>
@@ -975,10 +995,13 @@
          </item>
         </widget>
        </item>
-       <item row="1" column="1">
-        <widget class="QCheckBox" name="checkBox_verticalLayout">
+       <item row="0" column="1">
+        <widget class="QLabel" name="label_logger_level">
          <property name="text">
-          <string/>
+          <string>Logger level</string>
+         </property>
+         <property name="wordWrap">
+          <bool>true</bool>
          </property>
         </widget>
        </item>
@@ -987,7 +1010,7 @@
      <item>
       <widget class="QToolBox" name="toolBox">
        <property name="currentIndex">
-        <number>3</number>
+        <number>0</number>
        </property>
        <widget class="QWidget" name="page_3">
         <property name="geometry">
@@ -1131,7 +1154,7 @@
           <x>0</x>
           <y>0</y>
           <width>280</width>
-          <height>584</height>
+          <height>666</height>
          </rect>
         </property>
         <attribute name="label">
@@ -1167,14 +1190,14 @@
               <number>3</number>
              </property>
              <property name="minimum">
-              <double>0.010000000000000</double>
+              <double>0.001000000000000</double>
              </property>
              <property name="singleStep">
               <double>0.010000000000000</double>
              </property>
             </widget>
            </item>
-           <item row="2" column="1">
+           <item row="3" column="1">
             <widget class="QLabel" name="label_51">
              <property name="text">
               <string>Gain compensation radius (Constraints view)</string>
@@ -1184,7 +1207,7 @@
              </property>
             </widget>
            </item>
-           <item row="2" column="0">
+           <item row="3" column="0">
             <widget class="QDoubleSpinBox" name="doubleSpinBox_gainCompensationRadius">
              <property name="suffix">
               <string> m</string>
@@ -1197,6 +1220,52 @@
              </property>
              <property name="maximum">
               <double>10.000000000000000</double>
+             </property>
+             <property name="singleStep">
+              <double>0.010000000000000</double>
+             </property>
+             <property name="value">
+              <double>0.000000000000000</double>
+             </property>
+            </widget>
+           </item>
+           <item row="2" column="1">
+            <widget class="QLabel" name="label_53">
+             <property name="text">
+              <string>OctoMap</string>
+             </property>
+            </widget>
+           </item>
+           <item row="2" column="0">
+            <widget class="QCheckBox" name="checkBox_octomap">
+             <property name="text">
+              <string/>
+             </property>
+            </widget>
+           </item>
+           <item row="4" column="1">
+            <widget class="QLabel" name="label_54">
+             <property name="text">
+              <string>Voxel size (for clouds and scans)</string>
+             </property>
+             <property name="wordWrap">
+              <bool>true</bool>
+             </property>
+            </widget>
+           </item>
+           <item row="4" column="0">
+            <widget class="QDoubleSpinBox" name="doubleSpinBox_voxelSize">
+             <property name="suffix">
+              <string> m</string>
+             </property>
+             <property name="decimals">
+              <number>3</number>
+             </property>
+             <property name="minimum">
+              <double>0.000000000000000</double>
+             </property>
+             <property name="maximum">
+              <double>99.000000000000000</double>
              </property>
              <property name="singleStep">
               <double>0.010000000000000</double>
@@ -1470,7 +1539,7 @@
             <double>0.100000000000000</double>
            </property>
            <property name="value">
-            <double>0.300000000000000</double>
+            <double>1.000000000000000</double>
            </property>
           </widget>
          </item>
@@ -1516,7 +1585,7 @@
             <number>100</number>
            </property>
            <property name="value">
-            <number>1</number>
+            <number>5</number>
            </property>
           </widget>
          </item>
@@ -1547,8 +1616,8 @@
          <rect>
           <x>0</x>
           <y>0</y>
-          <width>333</width>
-          <height>256</height>
+          <width>186</width>
+          <height>496</height>
          </rect>
         </property>
         <attribute name="label">
@@ -1776,6 +1845,16 @@
      <item>
       <layout class="QHBoxLayout" name="horizontalLayout_3">
        <item>
+        <widget class="QCheckBox" name="checkBox_showWords">
+         <property name="text">
+          <string>Words</string>
+         </property>
+         <property name="checked">
+          <bool>false</bool>
+         </property>
+        </widget>
+       </item>
+       <item>
         <widget class="QCheckBox" name="checkBox_showCloud">
          <property name="text">
           <string>Cloud</string>
@@ -1831,7 +1910,7 @@
           <string>Odom Frame</string>
          </property>
          <property name="checked">
-          <bool>false</bool>
+          <bool>true</bool>
          </property>
         </widget>
        </item>
@@ -1906,7 +1985,119 @@
       <number>0</number>
      </property>
      <item>
+      <layout class="QGridLayout" name="gridLayout_8" columnstretch="0,1">
+       <item row="0" column="0">
+        <widget class="QCheckBox" name="checkBox_timeStats">
+         <property name="text">
+          <string/>
+         </property>
+         <property name="checked">
+          <bool>true</bool>
+         </property>
+        </widget>
+       </item>
+       <item row="0" column="1">
+        <widget class="QLabel" name="label_logger_level_3">
+         <property name="text">
+          <string>Time (s) used in figures for x-axis instead of node IDs.</string>
+         </property>
+         <property name="wordWrap">
+          <bool>true</bool>
+         </property>
+        </widget>
+       </item>
+      </layout>
+     </item>
+     <item>
       <widget class="rtabmap::StatsToolBox" name="toolBox_statistics" native="true"/>
+     </item>
+    </layout>
+   </widget>
+  </widget>
+  <widget class="QDockWidget" name="dockWidget_occupancyGridView">
+   <property name="windowTitle">
+    <string>Occupancy Grid</string>
+   </property>
+   <attribute name="dockWidgetArea">
+    <number>4</number>
+   </attribute>
+   <widget class="QWidget" name="dockWidgetContents_occupancyGrid">
+    <layout class="QVBoxLayout" name="verticalLayout_14" stretch="1,0">
+     <property name="spacing">
+      <number>0</number>
+     </property>
+     <property name="margin">
+      <number>0</number>
+     </property>
+     <item>
+      <layout class="QVBoxLayout" name="layout_occupancyGridView">
+       <property name="spacing">
+        <number>0</number>
+       </property>
+      </layout>
+     </item>
+     <item>
+      <layout class="QHBoxLayout" name="horizontalLayout_8">
+       <item>
+        <widget class="QCheckBox" name="checkBox_grid_2d">
+         <property name="text">
+          <string>2d Map</string>
+         </property>
+         <property name="checked">
+          <bool>false</bool>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QCheckBox" name="checkBox_grid_cubes">
+         <property name="text">
+          <string>Cubes Rendering</string>
+         </property>
+         <property name="checked">
+          <bool>false</bool>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QCheckBox" name="checkBox_grid_empty">
+         <property name="text">
+          <string>Empty Space</string>
+         </property>
+         <property name="checked">
+          <bool>false</bool>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QSpinBox" name="spinBox_grid_depth">
+         <property name="prefix">
+          <string>Depth </string>
+         </property>
+         <property name="minimum">
+          <number>0</number>
+         </property>
+         <property name="maximum">
+          <number>16</number>
+         </property>
+         <property name="value">
+          <number>16</number>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <spacer name="horizontalSpacer_5">
+         <property name="orientation">
+          <enum>Qt::Horizontal</enum>
+         </property>
+         <property name="sizeHint" stdset="0">
+          <size>
+           <width>40</width>
+           <height>20</height>
+          </size>
+         </property>
+        </spacer>
+       </item>
+      </layout>
      </item>
     </layout>
    </widget>
@@ -1926,29 +2117,9 @@
     <string>Generate graph (*.dot) ...</string>
    </property>
   </action>
-  <action name="actionGenerate_graph_only_weighted_locations">
-   <property name="text">
-    <string>Generate graph (only weighted locations) ...</string>
-   </property>
-  </action>
-  <action name="actionClean_database">
-   <property name="text">
-    <string>Clean database</string>
-   </property>
-  </action>
   <action name="actionGenerate_local_graph_dot">
    <property name="text">
     <string>Generate local graph (.dot) ...</string>
-   </property>
-  </action>
-  <action name="actionClean_local_graph">
-   <property name="text">
-    <string>Clean local graph ...</string>
-   </property>
-  </action>
-  <action name="actionUpdate_base_ids">
-   <property name="text">
-    <string>Update base ids</string>
    </property>
   </action>
   <action name="actionGenerate_3D_map_pcd">
@@ -1969,11 +2140,6 @@
   <action name="actionView_3D_map">
    <property name="text">
     <string>View 3D map...</string>
-   </property>
-  </action>
-  <action name="actionGenerate_TORO_graph_graph">
-   <property name="text">
-    <string>Generate TORO graph (*.graph)...</string>
    </property>
   </action>
   <action name="actionRefine_all_neighbor_links">
@@ -2004,22 +2170,7 @@
   </action>
   <action name="actionReset_all_changes">
    <property name="text">
-    <string>Reset all changes</string>
-   </property>
-  </action>
-  <action name="actionGenerate_g2o_graph_g2o">
-   <property name="text">
-    <string>Generate g2o graph (*.g2o)...</string>
-   </property>
-  </action>
-  <action name="actionView_3D_laser_scans">
-   <property name="text">
-    <string>View 2D-3D laser scans...</string>
-   </property>
-  </action>
-  <action name="actionExport_3D_laser_scans_ply_pcd">
-   <property name="text">
-    <string>Export 2D-3D laser scans (*.ply *.pcd) ...</string>
+    <string>Reset link and grid map changes</string>
    </property>
   </action>
   <action name="actionRegenerate_local_grid_maps">
@@ -2032,28 +2183,74 @@
     <string>Regenerate local grid maps (selected)...</string>
    </property>
   </action>
+  <action name="actionEdit_depth_image">
+   <property name="text">
+    <string>Edit depth image...</string>
+   </property>
+  </action>
+  <action name="actionVertical_Layout">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="checked">
+    <bool>true</bool>
+   </property>
+   <property name="text">
+    <string>Vertical Layout</string>
+   </property>
+  </action>
+  <action name="actionRestore_default_GUI_settings">
+   <property name="text">
+    <string>Restore default GUI settings</string>
+   </property>
+  </action>
+  <action name="actionRaw_format_txt">
+   <property name="text">
+    <string>Raw format (*.txt)</string>
+   </property>
+  </action>
+  <action name="actionRGBD_SLAM_format_txt">
+   <property name="text">
+    <string>RGBD-SLAM format (*.txt)</string>
+   </property>
+  </action>
+  <action name="actionKITTI_format_txt">
+   <property name="text">
+    <string>KITTI format (*.txt)</string>
+   </property>
+  </action>
+  <action name="actionTORO_graph">
+   <property name="text">
+    <string>TORO (*.graph)</string>
+   </property>
+  </action>
+  <action name="actionG2o_g2o">
+   <property name="text">
+    <string>g2o (*.g2o)</string>
+   </property>
+  </action>
  </widget>
  <customwidgets>
   <customwidget>
    <class>rtabmap::ImageView</class>
    <extends>QWidget</extends>
-   <header>rtabmap/gui/ImageView.h</header>
+   <header>../include/rtabmap/gui/ImageView.h</header>
+  </customwidget>
+  <customwidget>
+   <class>rtabmap::StatsToolBox</class>
+   <extends>QWidget</extends>
+   <header>../include/rtabmap/gui/StatsToolBox.h</header>
+   <container>1</container>
   </customwidget>
   <customwidget>
    <class>rtabmap::GraphViewer</class>
    <extends>QGraphicsView</extends>
-   <header>rtabmap/gui/GraphViewer.h</header>
+   <header>../include/rtabmap/gui/GraphViewer.h</header>
   </customwidget>
   <customwidget>
    <class>rtabmap::ParametersToolBox</class>
    <extends>QWidget</extends>
    <header>ParametersToolBox.h</header>
-   <container>1</container>
-  </customwidget>
-  <customwidget>
-   <class>rtabmap::StatsToolBox</class>
-   <extends>QWidget</extends>
-   <header>rtabmap/gui/StatsToolBox.h</header>
    <container>1</container>
   </customwidget>
  </customwidgets>

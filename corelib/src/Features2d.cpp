@@ -272,6 +272,41 @@ void Feature2D::limitKeypoints(std::vector<cv::KeyPoint> & keypoints, std::vecto
 	}
 }
 
+void Feature2D::limitKeypoints(const std::vector<cv::KeyPoint> & keypoints, std::vector<bool> & inliers, int maxKeypoints)
+{
+	if(maxKeypoints > 0 && (int)keypoints.size() > maxKeypoints)
+	{
+		UTimer timer;
+		ULOGGER_DEBUG("too much words (%d), removing words with the hessian threshold", keypoints.size());
+		// Remove words under the new hessian threshold
+
+		// Sort words by hessian
+		std::multimap<float, int> hessianMap; // <hessian,id>
+		for(unsigned int i = 0; i <keypoints.size(); ++i)
+		{
+			//Keep track of the data, to be easier to manage the data in the next step
+			hessianMap.insert(std::pair<float, int>(fabs(keypoints[i].response), i));
+		}
+
+		// Keep keypoints with highest response
+		int removed = (int)hessianMap.size()-maxKeypoints;
+		std::multimap<float, int>::reverse_iterator iter = hessianMap.rbegin();
+		inliers.resize(keypoints.size(), false);
+		float minimumHessian = 0.0f;
+		for(int k=0; k < maxKeypoints && iter!=hessianMap.rend(); ++k, ++iter)
+		{
+			inliers[iter->second] = true;
+			minimumHessian = iter->first;
+		}
+		ULOGGER_DEBUG("%d keypoints removed, (kept %d), minimum response=%f", removed, maxKeypoints, minimumHessian);
+		ULOGGER_DEBUG("filter keypoints time = %f s", timer.ticks());
+	}
+	else
+	{
+		inliers.resize(keypoints.size(), true);
+	}
+}
+
 cv::Rect Feature2D::computeRoi(const cv::Mat & image, const std::string & roiRatios)
 {
 	return util2d::computeRoi(image, roiRatios);
@@ -369,9 +404,9 @@ Feature2D * Feature2D::create(Feature2D::Type type, const ParametersMap & parame
 	if(type == Feature2D::kFeatureSurf || type == Feature2D::kFeatureSift)
 	{
 #if CV_MAJOR_VERSION < 3
-		UWARN("SURF/SIFT features cannot be used because OpenCV was not built with nonfree module. ORB is used instead.");
+		UWARN("SURF and SIFT features cannot be used because OpenCV was not built with nonfree module. ORB is used instead.");
 #else
-		UWARN("SURF/SIFT features cannot be used because OpenCV was not built with xfeatures2d module. ORB is used instead.");
+		UWARN("SURF and SIFT features cannot be used because OpenCV was not built with xfeatures2d module. ORB is used instead.");
 #endif
 		type = Feature2D::kFeatureOrb;
 	}
@@ -381,10 +416,23 @@ Feature2D * Feature2D::create(Feature2D::Type type, const ParametersMap & parame
 	   type == Feature2D::kFeatureGfttBrief ||
 	   type == Feature2D::kFeatureGfttFreak)
 	{
-		UWARN("BRIEF/FREAK features cannot be used because OpenCV was not built with xfeatures2d module. ORB is used instead.");
+		UWARN("BRIEF and FREAK features cannot be used because OpenCV was not built with xfeatures2d module. ORB is used instead.");
 		type = Feature2D::kFeatureOrb;
 	}
 #endif
+#endif
+
+#if CV_MAJOR_VERSION < 3
+	if(type == Feature2D::kFeatureKaze)
+	{
+#ifdef RTABMAP_NONFREE
+		UWARN("KAZE detector/descriptor can be used only with OpenCV3. SURF is used instead.");
+		type = Feature2D::kFeatureSurf;
+#else
+		UWARN("KAZE detector/descriptor can be used only with OpenCV3. ORB is used instead.");
+		type = Feature2D::kFeatureOrb;
+#endif
+	}
 #endif
 
 	Feature2D * feature2D = 0;
@@ -416,6 +464,9 @@ Feature2D * Feature2D::create(Feature2D::Type type, const ParametersMap & parame
 		break;
 	case Feature2D::kFeatureBrisk:
 		feature2D = new BRISK(parameters);
+		break;
+	case Feature2D::kFeatureKaze:
+		feature2D = new KAZE(parameters);
 		break;
 #ifdef RTABMAP_NONFREE
 	default:
@@ -523,11 +574,15 @@ cv::Mat Feature2D::generateDescriptors(
 		const cv::Mat & image,
 		std::vector<cv::KeyPoint> & keypoints) const
 {
-	UASSERT(!image.empty());
-	UASSERT(image.type() == CV_8UC1);
-	cv::Mat descriptors = generateDescriptorsImpl(image, keypoints);
-	UASSERT_MSG(descriptors.rows == (int)keypoints.size(), uFormat("descriptors=%d, keypoints=%d", descriptors.rows, (int)keypoints.size()).c_str());
-	UDEBUG("Descriptors extracted = %d, remaining kpts=%d", descriptors.rows, (int)keypoints.size());
+	cv::Mat descriptors;
+	if(keypoints.size())
+	{
+		UASSERT(!image.empty());
+		UASSERT(image.type() == CV_8UC1);
+		descriptors = generateDescriptorsImpl(image, keypoints);
+		UASSERT_MSG(descriptors.rows == (int)keypoints.size(), uFormat("descriptors=%d, keypoints=%d", descriptors.rows, (int)keypoints.size()).c_str());
+		UDEBUG("Descriptors extracted = %d, remaining kpts=%d", descriptors.rows, (int)keypoints.size());
+	}
 	return descriptors;
 }
 
@@ -536,47 +591,50 @@ std::vector<cv::Point3f> Feature2D::generateKeypoints3D(
 		const std::vector<cv::KeyPoint> & keypoints) const
 {
 	std::vector<cv::Point3f> keypoints3D;
-	if(!data.rightRaw().empty() && !data.imageRaw().empty() && data.stereoCameraModel().isValidForProjection())
+	if(keypoints.size())
 	{
-		//stereo
-		cv::Mat imageMono;
-		// convert to grayscale
-		if(data.imageRaw().channels() > 1)
+		if(!data.rightRaw().empty() && !data.imageRaw().empty() && data.stereoCameraModel().isValidForProjection())
 		{
-			cv::cvtColor(data.imageRaw(), imageMono, cv::COLOR_BGR2GRAY);
+			//stereo
+			cv::Mat imageMono;
+			// convert to grayscale
+			if(data.imageRaw().channels() > 1)
+			{
+				cv::cvtColor(data.imageRaw(), imageMono, cv::COLOR_BGR2GRAY);
+			}
+			else
+			{
+				imageMono = data.imageRaw();
+			}
+
+			std::vector<cv::Point2f> leftCorners;
+			cv::KeyPoint::convert(keypoints, leftCorners);
+			std::vector<unsigned char> status;
+
+			std::vector<cv::Point2f> rightCorners;
+			rightCorners = _stereo->computeCorrespondences(
+					imageMono,
+					data.rightRaw(),
+					leftCorners,
+					status);
+
+			keypoints3D = util3d::generateKeypoints3DStereo(
+					leftCorners,
+					rightCorners,
+					data.stereoCameraModel(),
+					status,
+					_minDepth,
+					_maxDepth);
 		}
-		else
+		else if(!data.depthRaw().empty() && data.cameraModels().size())
 		{
-			imageMono = data.imageRaw();
+			keypoints3D = util3d::generateKeypoints3DDepth(
+					keypoints,
+					data.depthOrRightRaw(),
+					data.cameraModels(),
+					_minDepth,
+					_maxDepth);
 		}
-
-		std::vector<cv::Point2f> leftCorners;
-		cv::KeyPoint::convert(keypoints, leftCorners);
-		std::vector<unsigned char> status;
-
-		std::vector<cv::Point2f> rightCorners;
-		rightCorners = _stereo->computeCorrespondences(
-				imageMono,
-				data.rightRaw(),
-				leftCorners,
-				status);
-
-		keypoints3D = util3d::generateKeypoints3DStereo(
-				leftCorners,
-				rightCorners,
-				data.stereoCameraModel(),
-				status,
-				_minDepth,
-				_maxDepth);
-	}
-	else if(!data.depthRaw().empty() && data.cameraModels().size())
-	{
-		keypoints3D = util3d::generateKeypoints3DDepth(
-				keypoints,
-				data.depthOrRightRaw(),
-				data.cameraModels(),
-				_minDepth,
-				_maxDepth);
 	}
 
 	return keypoints3D;
@@ -1415,6 +1473,70 @@ cv::Mat BRISK::generateDescriptorsImpl(const cv::Mat & image, std::vector<cv::Ke
 	UASSERT(!image.empty() && image.channels() == 1 && image.depth() == CV_8U);
 	cv::Mat descriptors;
 	brisk_->compute(image, keypoints, descriptors);
+	return descriptors;
+}
+
+//////////////////////////
+//KAZE
+//////////////////////////
+KAZE::KAZE(const ParametersMap & parameters) :
+		extended_(Parameters::defaultKAZEExtended()),
+		upright_(Parameters::defaultKAZEUpright()),
+		threshold_(Parameters::defaultKAZEThreshold()),
+		nOctaves_(Parameters::defaultKAZENOctaves()),
+		nOctaveLayers_(Parameters::defaultKAZENOctaveLayers()),
+		diffusivity_(Parameters::defaultKAZEDiffusivity())
+{
+	parseParameters(parameters);
+}
+
+KAZE::~KAZE()
+{
+}
+
+void KAZE::parseParameters(const ParametersMap & parameters)
+{
+	Parameters::parse(parameters, Parameters::kKAZEExtended(), extended_);
+	Parameters::parse(parameters, Parameters::kKAZEUpright(), upright_);
+	Parameters::parse(parameters, Parameters::kKAZEThreshold(), threshold_);
+	Parameters::parse(parameters, Parameters::kKAZENOctaves(), nOctaves_);
+	Parameters::parse(parameters, Parameters::kKAZENOctaveLayers(), nOctaveLayers_);
+	Parameters::parse(parameters, Parameters::kKAZEDiffusivity(), diffusivity_);
+
+#if CV_MAJOR_VERSION > 2
+	kaze_ = cv::KAZE::create(extended_, upright_, threshold_, nOctaves_, nOctaveLayers_, diffusivity_);
+#else
+	UWARN("RTAB-Map is not built with OpenCV3 so Kaze feature cannot be used!");
+#endif
+}
+
+std::vector<cv::KeyPoint> KAZE::generateKeypointsImpl(const cv::Mat & image, const cv::Rect & roi, const cv::Mat & mask) const
+{
+	UASSERT(!image.empty() && image.channels() == 1 && image.depth() == CV_8U);
+	std::vector<cv::KeyPoint> keypoints;
+#if CV_MAJOR_VERSION > 2
+	cv::Mat imgRoi(image, roi);
+	cv::Mat maskRoi;
+	if (!mask.empty())
+	{
+		maskRoi = cv::Mat(mask, roi);
+	}
+	kaze_->detect(imgRoi, keypoints, maskRoi); // Opencv keypoints
+#else
+	UWARN("RTAB-Map is not built with OpenCV3 so Kaze feature cannot be used!");
+#endif
+	return keypoints;
+}
+
+cv::Mat KAZE::generateDescriptorsImpl(const cv::Mat & image, std::vector<cv::KeyPoint> & keypoints) const
+{
+	UASSERT(!image.empty() && image.channels() == 1 && image.depth() == CV_8U);
+	cv::Mat descriptors;
+#if CV_MAJOR_VERSION > 2
+	kaze_->compute(image, keypoints, descriptors);
+#else
+	UWARN("RTAB-Map is not built with OpenCV3 so Kaze feature cannot be used!");
+#endif
 	return descriptors;
 }
 

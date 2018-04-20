@@ -126,15 +126,19 @@ std::map<int, Transform> OptimizerTORO::optimize(
 
 				int id1 = iter->second.from();
 				int id2 = iter->second.to();
-				AISNavigation::TreePoseGraph2::Vertex* v1=pg2.vertex(id1);
-				AISNavigation::TreePoseGraph2::Vertex* v2=pg2.vertex(id2);
-				UASSERT(v1 != 0);
-				UASSERT(v2 != 0);
-				AISNavigation::TreePoseGraph2::Transformation t(p);
-				if (!pg2.addEdge(v1, v2, t, inf))
+				if(id1 != id2)
 				{
-					UERROR("Map: Edge already exits between nodes %d and %d, skipping", id1, id2);
+					AISNavigation::TreePoseGraph2::Vertex* v1=pg2.vertex(id1);
+					AISNavigation::TreePoseGraph2::Vertex* v2=pg2.vertex(id2);
+					UASSERT(v1 != 0);
+					UASSERT(v2 != 0);
+					AISNavigation::TreePoseGraph2::Transformation t(p);
+					if (!pg2.addEdge(v1, v2, t, inf))
+					{
+						UERROR("Map: Edge already exits between nodes %d and %d, skipping", id1, id2);
+					}
 				}
+				//else // not supporting pose prior
 			}
 		}
 		else
@@ -154,15 +158,19 @@ std::map<int, Transform> OptimizerTORO::optimize(
 
 				int id1 = iter->second.from();
 				int id2 = iter->second.to();
-				AISNavigation::TreePoseGraph3::Vertex* v1=pg3.vertex(id1);
-				AISNavigation::TreePoseGraph3::Vertex* v2=pg3.vertex(id2);
-				UASSERT(v1 != 0);
-				UASSERT(v2 != 0);
-				AISNavigation::TreePoseGraph3::Transformation t(p);
-				if (!pg3.addEdge(v1, v2, t, inf))
+				if(id1 != id2)
 				{
-					UERROR("Map: Edge already exits between nodes %d and %d, skipping", id1, id2);
+					AISNavigation::TreePoseGraph3::Vertex* v1=pg3.vertex(id1);
+					AISNavigation::TreePoseGraph3::Vertex* v2=pg3.vertex(id2);
+					UASSERT(v1 != 0);
+					UASSERT(v2 != 0);
+					AISNavigation::TreePoseGraph3::Transformation t(p);
+					if (!pg3.addEdge(v1, v2, t, inf))
+					{
+						UERROR("Map: Edge already exits between nodes %d and %d, skipping", id1, id2);
+					}
 				}
+				//else // not supporting pose prior
 			}
 		}
 		UDEBUG("buildMST... root=%d", rootId);
@@ -446,22 +454,20 @@ bool OptimizerTORO::loadGraph(
 				float roll = uStr2Float(strList[6]);
 				float pitch = uStr2Float(strList[7]);
 				float yaw = uStr2Float(strList[8]);
-				float infR = uStr2Float(strList[9]);
-				float infP = uStr2Float(strList[15]);
-				float infW = uStr2Float(strList[20]);
-				UASSERT_MSG(infR > 0 && infP > 0 && infW > 0, uFormat("Information matrix should not be null! line=\"%s\"", line).c_str());
-				float rotVariance = infR<=infP && infR<=infW?infR:infP<=infW?infP:infW; // maximum variance
-				float infX = uStr2Float(strList[24]);
-				float infY = uStr2Float(strList[27]);
-				float infZ = uStr2Float(strList[29]);
-				UASSERT_MSG(infX > 0 && infY > 0 && infZ > 0, uFormat("Information matrix should not be null! line=\"%s\"", line).c_str());
-				float transVariance = 1.0f/(infX<=infY && infX<=infZ?infX:infY<=infW?infY:infZ); // maximum variance
-				UINFO("id=%d rotV=%f transV=%f", idFrom, rotVariance, transVariance);
+				cv::Mat informationMatrix(6,6,CV_64FC1);
+				informationMatrix.at<double>(3,3) = uStr2Float(strList[9]);
+				informationMatrix.at<double>(4,4) = uStr2Float(strList[15]);
+				informationMatrix.at<double>(5,5) = uStr2Float(strList[20]);
+				UASSERT_MSG(informationMatrix.at<double>(3,3) > 0.0 && informationMatrix.at<double>(4,4) > 0.0 && informationMatrix.at<double>(5,5) > 0.0, uFormat("Information matrix should not be null! line=\"%s\"", line).c_str());
+				informationMatrix.at<double>(0,0) = uStr2Float(strList[24]);
+				informationMatrix.at<double>(1,1) = uStr2Float(strList[27]);
+				informationMatrix.at<double>(2,2) = uStr2Float(strList[29]);
+				UASSERT_MSG(informationMatrix.at<double>(0,0) > 0.0 && informationMatrix.at<double>(1,1) > 0.0 && informationMatrix.at<double>(2,2) > 0.0, uFormat("Information matrix should not be null! line=\"%s\"", line).c_str());
 				Transform transform(x, y, z, roll, pitch, yaw);
 				if(poses.find(idFrom) != poses.end() && poses.find(idTo) != poses.end())
 				{
 					//Link type is unknown
-					Link link(idFrom, idTo, Link::kUndef, transform, rotVariance, transVariance);
+					Link link(idFrom, idTo, Link::kUndef, transform, informationMatrix);
 					edgeConstraints.insert(std::pair<int, Link>(idFrom, link));
 				}
 				else

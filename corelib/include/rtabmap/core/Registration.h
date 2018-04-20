@@ -25,8 +25,8 @@ ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#ifndef REGISTRATION_H_
-#define REGISTRATION_H_
+#ifndef RTABMAP_REGISTRATION_H_
+#define RTABMAP_REGISTRATION_H_
 
 #include "rtabmap/core/RtabmapExp.h" // DLL export/import defines
 
@@ -63,6 +63,7 @@ public:
 
 	bool varianceFromInliersCount() const {return varianceFromInliersCount_;}
 	bool force3DoF() const {return force3DoF_;}
+	bool covarianceNormalized() const {return covarianceNormalized_;}
 
 	// take ownership!
 	void setChildRegistration(Registration * child);
@@ -75,7 +76,7 @@ public:
 	Transform computeTransformation(
 			const SensorData & from,
 			const SensorData & to,
-			Transform SensorData = Transform::getIdentity(),
+			Transform guess = Transform::getIdentity(),
 			RegistrationInfo * info = 0) const;
 
 	Transform computeTransformationMod(
@@ -83,6 +84,8 @@ public:
 			Signature & to,
 			Transform guess = Transform::getIdentity(),
 			RegistrationInfo * info = 0) const;
+
+	void normalizeCovariance(cv::Mat & covariance, const Transform & transform) const;
 
 protected:
 	// take ownership of child
@@ -104,6 +107,7 @@ protected:
 
 private:
 	bool varianceFromInliersCount_;
+	bool covarianceNormalized_;
 	bool force3DoF_;
 	Registration * child_;
 
@@ -111,4 +115,4 @@ private:
 
 }
 
-#endif /* REGISTRATION_H_ */
+#endif /* RTABMAP_REGISTRATION_H_ */
