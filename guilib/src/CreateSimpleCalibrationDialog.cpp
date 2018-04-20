@@ -60,7 +60,6 @@ CreateSimpleCalibrationDialog::CreateSimpleCalibrationDialog(
 	connect(ui_->comboBox_advanced, SIGNAL(currentIndexChanged(int)), ui_->stackedWidget, SLOT(setCurrentIndex(int)));
 
 	connect(ui_->checkBox_stereo, SIGNAL(stateChanged(int)), this, SLOT(updateStereoView()));
-	connect(ui_->comboBox_advanced, SIGNAL(currentIndexChanged(int)), this, SLOT(updateStereoView()));
 	connect(ui_->checkBox_stereo, SIGNAL(stateChanged(int)), this, SLOT(updateSaveStatus()));
 	connect(ui_->comboBox_advanced, SIGNAL(currentIndexChanged(int)), this, SLOT(updateSaveStatus()));
 
@@ -108,7 +107,7 @@ void CreateSimpleCalibrationDialog::updateStereoView()
 	ui_->doubleSpinBox_cx_r->setVisible(checked);
 	ui_->doubleSpinBox_cy_r->setVisible(checked);
 	ui_->lineEdit_D_r->setVisible(checked);
-	ui_->groupBox_stereo_extrinsics->setVisible(ui_->comboBox_advanced->currentIndex() == 1 && checked);
+	ui_->groupBox_stereo_extrinsics->setVisible(checked);
 	ui_->label_left->setVisible(checked);
 }
 
@@ -118,8 +117,6 @@ void CreateSimpleCalibrationDialog::updateSaveStatus()
 	if(ui_->comboBox_advanced->currentIndex() == 0 &&
 	   ui_->doubleSpinBox_fx->value() > 0.0 &&
 	   ui_->doubleSpinBox_fy->value() > 0.0 &&
-	   ui_->spinBox_width->value() > 0 &&
-	   ui_->spinBox_height->value() > 0 &&
 	   (!ui_->checkBox_stereo->isChecked() || ui_->doubleSpinBox_baseline->value() != 0.0))
 	{
 		// basic
@@ -141,13 +138,12 @@ void CreateSimpleCalibrationDialog::updateSaveStatus()
 			 (!ui_->checkBox_stereo->isChecked() || !ui_->lineEdit_RT->text().isEmpty()))
 	{
 		//advanced
-		QStringList distorsionsStrListL = ui_->lineEdit_D_l->text().remove('[').remove(']').replace(',',' ').replace(';',' ').trimmed().split(' ');
-		QStringList distorsionsStrListR = ui_->lineEdit_D_r->text().remove('[').remove(']').replace(',',' ').replace(';',' ').trimmed().split(' ');
-		std::string RT = ui_->lineEdit_RT->text().remove('[').remove(']').replace(',',' ').replace(';',' ').trimmed().toStdString();
+		QStringList distorsionsStrListL = ui_->lineEdit_D_l->text().trimmed().split(' ');
+		QStringList distorsionsStrListR = ui_->lineEdit_D_r->text().trimmed().split(' ');
 
 		if((distorsionsStrListL.size() == 4 || distorsionsStrListL.size() == 5 || distorsionsStrListL.size() == 8) &&
-				(!ui_->checkBox_stereo->isChecked() || (distorsionsStrListR.size() == 4 || distorsionsStrListR.size() == 5 || distorsionsStrListR.size() == 8)) &&
-				(!ui_->checkBox_stereo->isChecked() || (!RT.empty() && Transform::canParseString(RT))))
+				(!ui_->checkBox_stereo->isChecked() || distorsionsStrListL.size() == 4 || distorsionsStrListL.size() == 5 || distorsionsStrListL.size() == 8) &&
+				(!ui_->checkBox_stereo->isChecked() || Transform::canParseString(ui_->lineEdit_RT->text().trimmed().toStdString())))
 		{
 			valid = true;
 		}
@@ -192,7 +188,7 @@ void CreateSimpleCalibrationDialog::saveCalibration()
 			cv::Mat P = cv::Mat::zeros(3, 4, CV_64FC1);
 			K.copyTo(cv::Mat(P, cv::Range(0,3), cv::Range(0,3)));
 
-			QStringList distorsionCoeffs = ui_->lineEdit_D_l->text().remove('[').remove(']').replace(',',' ').replace(';',' ').trimmed().split(' ');
+			QStringList distorsionCoeffs = ui_->lineEdit_D_l->text().trimmed().split(' ');
 			UASSERT(distorsionCoeffs.size() == 4 || distorsionCoeffs.size() == 5 || distorsionCoeffs.size() == 8);
 			cv::Mat D = cv::Mat::zeros(1, distorsionCoeffs.size(), CV_64FC1);
 			bool ok;
@@ -201,7 +197,7 @@ void CreateSimpleCalibrationDialog::saveCalibration()
 				D.at<double>(i) = distorsionCoeffs.at(i).toDouble(&ok);
 				if(!ok)
 				{
-					QMessageBox::warning(this, tr("Save"), tr("Error parsing left distortion coefficients \"%1\".").arg(ui_->lineEdit_D_l->text()));
+					QMessageBox::warning(this, tr("Save"), tr("Error parsing left distorsion coefficients \"%1\".").arg(ui_->lineEdit_D_l->text()));
 					return;
 				}
 			}
@@ -240,7 +236,7 @@ void CreateSimpleCalibrationDialog::saveCalibration()
 				cv::Mat P = cv::Mat::zeros(3, 4, CV_64FC1);
 				K.copyTo(cv::Mat(P, cv::Range(0,3), cv::Range(0,3)));
 
-				QStringList distorsionCoeffs = ui_->lineEdit_D_r->text().remove('[').remove(']').replace(',',' ').replace(';',' ').trimmed().split(' ');
+				QStringList distorsionCoeffs = ui_->lineEdit_D_r->text().trimmed().split(' ');
 				UASSERT(distorsionCoeffs.size() == 4 || distorsionCoeffs.size() == 5 || distorsionCoeffs.size() == 8);
 				cv::Mat D = cv::Mat::zeros(1, distorsionCoeffs.size(), CV_64FC1);
 				bool ok;
@@ -249,7 +245,7 @@ void CreateSimpleCalibrationDialog::saveCalibration()
 					D.at<double>(i) = distorsionCoeffs.at(i).toDouble(&ok);
 					if(!ok)
 					{
-						QMessageBox::warning(this, tr("Save"), tr("Error parsing right distortion coefficients \"%1\".").arg(ui_->lineEdit_D_r->text()));
+						QMessageBox::warning(this, tr("Save"), tr("Error parsing right distorsion coefficients \"%1\".").arg(ui_->lineEdit_D_l->text()));
 						return;
 					}
 				}
@@ -257,8 +253,8 @@ void CreateSimpleCalibrationDialog::saveCalibration()
 				modelRight = CameraModel(name.toStdString(), cv::Size(width,height), K, D, R, P);
 				UASSERT(modelRight.isValidForRectification());
 
-				UASSERT(Transform::canParseString(ui_->lineEdit_RT->text().remove('[').remove(']').replace(',',' ').replace(';',' ').trimmed().toStdString()));
-				stereoModel = StereoCameraModel(name.toStdString(), modelLeft, modelRight, Transform::fromString(ui_->lineEdit_RT->text().remove('[').remove(']').replace(',',' ').replace(';',' ').trimmed().toStdString()));
+				UASSERT(Transform::canParseString(ui_->lineEdit_RT->text().trimmed().toStdString()));
+				stereoModel = StereoCameraModel(name.toStdString(), modelLeft, modelRight, Transform::fromString(ui_->lineEdit_RT->text().toStdString()));
 				UASSERT(stereoModel.isValidForRectification());
 			}
 

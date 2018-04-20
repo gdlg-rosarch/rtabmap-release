@@ -38,9 +38,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <opencv2/opencv_modules.hpp>
 
 #if CV_MAJOR_VERSION < 3
-#ifdef HAVE_OPENCV_GPU
 #include <opencv2/gpu/gpu.hpp>
-#endif
 #else
 #include <opencv2/core/cuda.hpp>
 #ifdef HAVE_OPENCV_CUDAFEATURES2D
@@ -50,9 +48,6 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include <fstream>
 #include <string>
-
-#define KDTREE_SIZE 4
-#define KNN_CHECKS 32
 
 namespace rtabmap
 {
@@ -367,7 +362,7 @@ void VWDictionary::update()
 							break;
 						case kNNFlannKdTree:
 							UASSERT_MSG(descriptor.type() == CV_32F, "To use KdTree dictionary, float descriptors are required!");
-							_flannIndex->buildKDTreeIndex(descriptor, KDTREE_SIZE, useDistanceL1_);
+							_flannIndex->buildKDTreeIndex(descriptor, 4, useDistanceL1_);
 							break;
 						case kNNFlannLSH:
 							UASSERT_MSG(descriptor.type() == CV_8U, "To use LSH dictionary, binary descriptors are required!");
@@ -490,7 +485,7 @@ void VWDictionary::update()
 					break;
 				case kNNFlannKdTree:
 					UASSERT_MSG(type == CV_32F, "To use KdTree dictionary, float descriptors are required!");
-					_flannIndex->buildKDTreeIndex(_dataTree, KDTREE_SIZE, useDistanceL1_);
+					_flannIndex->buildKDTreeIndex(_dataTree, 4, useDistanceL1_);
 					break;
 				case kNNFlannLSH:
 					UASSERT_MSG(type == CV_8U, "To use LSH dictionary, binary descriptors are required!");
@@ -553,7 +548,7 @@ int VWDictionary::getNextId()
 
 void VWDictionary::addWordRef(int wordId, int signatureId)
 {
-	if(signatureId > 0)
+	if(signatureId > 0 && wordId > 0)
 	{
 		VisualWord * vw = 0;
 		vw = uValue(_visualWords, wordId, vw);
@@ -687,7 +682,7 @@ std::list<int> VWDictionary::addNewWords(const cv::Mat & descriptorsIn,
 
 		if(_strategy == kNNFlannNaive || _strategy == kNNFlannKdTree || _strategy == kNNFlannLSH)
 		{
-			_flannIndex->knnSearch(descriptors, results, dists, k, KNN_CHECKS);
+			_flannIndex->knnSearch(descriptors, results, dists, k);
 		}
 		else if(_strategy == kNNBruteForce)
 		{
@@ -997,7 +992,7 @@ std::vector<int> VWDictionary::findNN(const cv::Mat & queryIn) const
 
 			if(_strategy == kNNFlannNaive || _strategy == kNNFlannKdTree || _strategy == kNNFlannLSH)
 			{
-				_flannIndex->knnSearch(query, results, dists, k, KNN_CHECKS);
+				_flannIndex->knnSearch(query, results, dists, k);
 			}
 			else if(_strategy == kNNBruteForce)
 			{

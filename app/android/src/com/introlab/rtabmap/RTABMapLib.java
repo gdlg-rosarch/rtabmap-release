@@ -25,10 +25,8 @@ public class RTABMapLib
     // The activity object is used for checking if the API version is outdated.
     public static native void onCreate(RTABMapActivity activity);
     
-    public static native void setScreenRotation(int displayRotation, int cameraRotation);
-    
-    public static native int openDatabase(String databasePath, boolean databaseInMemory, boolean optimize);
-    public static native int openDatabase2(String databaseSource, String databasePath, boolean databaseInMemory, boolean optimize);
+    public static native void openEmptyDatabase();
+    public static native void openDatabase(String databasePath);
     
     /*
      * Called when the Tango service is connected.
@@ -59,7 +57,6 @@ public class RTABMapLib
     
 
     public static native void setPausedMapping(boolean paused);
-    public static native void setOnlineBlending(boolean enabled);
     public static native void setMapCloudShown(boolean shown);
     public static native void setOdomCloudShown(boolean shown);
     public static native void setMeshRendering(boolean enabled, boolean withTexture);
@@ -67,54 +64,22 @@ public class RTABMapLib
     public static native void setTrajectoryMode(boolean enabled);
     public static native void setGraphOptimization(boolean enabled);
     public static native void setNodesFiltering(boolean enabled);
+    public static native void setDriftCorrection(boolean enabled);
     public static native void setGraphVisible(boolean visible);
     public static native void setGridVisible(boolean visible);
-    public static native void setRawScanSaved(boolean enabled);
+    public static native void setAutoExposure(boolean enabled);
     public static native void setFullResolution(boolean enabled);
-    public static native void setSmoothing(boolean enabled);
-    public static native void setCameraColor(boolean enabled);
     public static native void setAppendMode(boolean enabled);
     public static native void setDataRecorderMode(boolean enabled);
     public static native void setMaxCloudDepth(float value);
-    public static native void setMinCloudDepth(float value);
-    public static native void setPointSize(float value);
-    public static native void setFOV(float value);
-    public static native void setOrthoCropFactor(float value);
-    public static native void setGridRotation(float value);
-    public static native void setLighting(boolean enabled);
-    public static native void setBackfaceCulling(boolean enabled);
-    public static native void setWireframe(boolean enabled);
-    public static native void setCloudDensityLevel(int value);
+    public static native void setMeshDecimation(int value);
     public static native void setMeshAngleTolerance(float value);
     public static native void setMeshTriangleSize(int value);
-    public static native void setClusterRatio(float value);
-    public static native void setMaxGainRadius(float value);
-    public static native void setRenderingTextureDecimation(int value);
-    public static native void setBackgroundColor(float gray);
     public static native int setMappingParameter(String key, String value);
 
     public static native void resetMapping();
     public static native void save(String outputDatabasePath);
-    public static native void cancelProcessing();
-    public static native boolean exportMesh(
-    		float cloudVoxelSize,
-    		boolean regenerateCloud,
-    		boolean meshing,
-    		int textureSize,
-    		int textureCount,
-    		int normalK,
-    		boolean optimized,
-    		float optimizedVoxelSize,
-    		int optimizedDepth,
-    		int optimizedMaxPolygons,
-    		float optimizedColorRadius,
-    		boolean optimizedCleanWhitePolygons,
-    		int optimizedMinClusterSize,
-    		float optimizedMaxTextureDistance,
-    		int optimizedMinTextureClusterSize,
-    		boolean blockRendering);
-    public static native boolean writeExportedMesh(String directory, String name);
-    public static native boolean postExportation(boolean visualize);
+    public static native boolean exportMesh(String filePath);
     public static native int postProcessing(int approach);
     
     public static native String getStatus();

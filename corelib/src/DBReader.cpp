@@ -59,7 +59,6 @@ DBReader::DBReader(const std::string & databasePath,
 	_cameraIndex(cameraIndex),
 	_dbDriver(0),
 	_currentId(_ids.end()),
-	_previousMapId(-1),
 	_previousStamp(0),
 	_previousMapID(0),
 	_calibrated(false)
@@ -82,7 +81,6 @@ DBReader::DBReader(const std::list<std::string> & databasePaths,
 	_cameraIndex(cameraIndex),
 	_dbDriver(0),
 	_currentId(_ids.end()),
-	_previousMapId(-1),
 	_previousStamp(0),
 	_previousMapID(0),
 	_calibrated(false)
@@ -110,8 +108,6 @@ bool DBReader::init(
 	}
 	_ids.clear();
 	_currentId=_ids.end();
-	_previousMapId = -1;
-	_previousInfMatrix = cv::Mat();
 	_previousStamp = 0;
 	_previousMapID = 0;
 	_calibrated = false;
@@ -267,8 +263,7 @@ SensorData DBReader::captureImage(CameraInfo * info)
 						double stamp;
 						int mapId;
 						Transform localTransform, pose, groundTruth;
-						std::vector<float> velocity;
-						_dbDriver->getNodeInfo(*_currentId, pose, mapId, weight, label, stamp, groundTruth, velocity);
+						_dbDriver->getNodeInfo(*_currentId, pose, mapId, weight, label, stamp, groundTruth);
 						if(previousStamp && stamp && stamp > previousStamp)
 						{
 							delay = stamp - previousStamp;
@@ -321,36 +316,18 @@ SensorData DBReader::getNextData(CameraInfo * info)
 			std::string label;
 			double stamp;
 			Transform groundTruth;
-			std::vector<float> velocity;
-			_dbDriver->getNodeInfo(*_currentId, pose, mapId, weight, label, stamp, groundTruth, velocity);
+			_dbDriver->getNodeInfo(*_currentId, pose, mapId, weight, label, stamp, groundTruth);
 
 			cv::Mat infMatrix = cv::Mat::eye(6,6,CV_64FC1);
 			if(!_odometryIgnored)
 			{
 				std::map<int, Link> links;
 				_dbDriver->loadLinks(*_currentId, links, Link::kNeighbor);
-				if(links.size() && links.begin()->first < *_currentId)
+				if(links.size())
 				{
 					// assume the first is the backward neighbor, take its variance
 					infMatrix = links.begin()->second.infMatrix();
-					_previousInfMatrix = infMatrix;
 				}
-				else if(_previousMapId != mapId)
-				{
-					// first node, set high variance to make rtabmap trigger a new map
-					infMatrix /= 9999.0;
-					UDEBUG("First node of map %d, variance set to 9999", mapId);
-				}
-				else
-				{
-					if(_previousInfMatrix.empty())
-					{
-						_previousInfMatrix = cv::Mat::eye(6,6,CV_64FC1);
-					}
-					// we have a node not linked to map, use last variance
-					infMatrix = _previousInfMatrix;
-				}
-				_previousMapId = mapId;
 			}
 			else
 			{
@@ -359,7 +336,7 @@ SensorData DBReader::getNextData(CameraInfo * info)
 
 			int seq = *_currentId;
 			++_currentId;
-			if(data.imageCompressed().empty() && weight>=0)
+			if(data.imageCompressed().empty())
 			{
 				UWARN("No image loaded from the database for id=%d!", *_currentId);
 			}
@@ -453,7 +430,6 @@ SensorData DBReader::getNextData(CameraInfo * info)
 				{
 					info->odomPose = pose;
 					info->odomCovariance = infMatrix.inv();
-					UDEBUG("odom variance = %f/%f", info->odomCovariance.at<double>(0,0), info->odomCovariance.at<double>(5,5));
 				}
 			}
 		}

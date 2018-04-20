@@ -50,14 +50,13 @@ signals:
 	void objDeletionEventReceived(int);
 
 protected:
-	virtual bool handleEvent(UEvent * event)
+	virtual void handleEvent(UEvent * event)
 	{
 		if(event->getClassName().compare("UObjDeletedEvent") == 0 &&
 		   event->getCode() == _watchedId)
 		{
 			emit objDeletionEventReceived(_watchedId);
 		}
-		return false;
 	}
 private:
 	int _watchedId;

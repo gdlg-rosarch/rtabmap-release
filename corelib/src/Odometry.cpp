@@ -28,10 +28,6 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <rtabmap/core/OdometryF2M.h>
 #include "rtabmap/core/Odometry.h"
 #include "rtabmap/core/OdometryF2F.h"
-#include "rtabmap/core/OdometryFovis.h"
-#include "rtabmap/core/OdometryViso2.h"
-#include "rtabmap/core/OdometryDVO.h"
-#include "rtabmap/core/OdometryORBSLAM2.h"
 #include "rtabmap/core/OdometryInfo.h"
 #include "rtabmap/core/util3d.h"
 #include "rtabmap/core/util3d_mapping.h"
@@ -60,18 +56,6 @@ Odometry * Odometry::create(Odometry::Type & type, const ParametersMap & paramet
 	Odometry * odometry = 0;
 	switch(type)
 	{
-	case Odometry::kTypeORBSLAM2:
-		odometry = new OdometryORBSLAM2(parameters);
-		break;
-	case Odometry::kTypeDVO:
-		odometry = new OdometryDVO(parameters);
-		break;
-	case Odometry::kTypeViso2:
-		odometry = new OdometryViso2(parameters);
-		break;
-	case Odometry::kTypeFovis:
-		odometry = new OdometryFovis(parameters);
-		break;
 	case Odometry::kTypeF2F:
 		odometry = new OdometryF2F(parameters);
 		break;
@@ -219,8 +203,6 @@ Transform Odometry::process(SensorData & data, OdometryInfo * info)
 
 Transform Odometry::process(SensorData & data, const Transform & guessIn, OdometryInfo * info)
 {
-	UASSERT_MSG(data.id() >= 0, uFormat("Input data should have ID greater or equal than 0 (id=%d)!", data.id()).c_str());
-
 	// Ground alignment
 	if(_pose.isIdentity() && _alignWithGround)
 	{
@@ -285,20 +267,8 @@ Transform Odometry::process(SensorData & data, const Transform & guessIn, Odomet
 	}
 
 	double dt = previousStamp_>0.0f?data.stamp() - previousStamp_:0.0;
-	Transform guess = dt>0.0 && guessFromMotion_ && !previousVelocityTransform_.isNull()?Transform::getIdentity():Transform();
-	if(!(dt>0.0 || (dt == 0.0 && previousVelocityTransform_.isNull())))
-	{
-		if(guessFromMotion_)
-		{
-			UERROR("Guess from motion is set but dt is invalid! Odometry is then computed without guess. (dt=%f previous transform=%s)", dt, previousVelocityTransform_.prettyPrint().c_str());
-		}
-		else if(_filteringStrategy==1)
-		{
-			UERROR("Kalman filtering is enalbed but dt is invalid! Odometry is then computed without Kalman filtering. (dt=%f previous transform=%s)", dt, previousVelocityTransform_.prettyPrint().c_str());
-		}
-		dt=0;
-		previousVelocityTransform_.setNull();
-	}
+	Transform guess = dt && guessFromMotion_ && !previousVelocityTransform_.isNull()?Transform::getIdentity():Transform();
+	UASSERT_MSG(dt>0.0 || (dt == 0.0 && previousVelocityTransform_.isNull()), uFormat("dt=%f previous transform=%s", dt, previousVelocityTransform_.prettyPrint().c_str()).c_str());
 	if(!previousVelocityTransform_.isNull())
 	{
 		if(guessFromMotion_)
@@ -544,6 +514,11 @@ Transform Odometry::process(SensorData & data, const Transform & guessIn, Odomet
 			distanceTravelled_ += t.getNorm();
 			info->distanceTravelled = distanceTravelled_;
 		}
+
+		info->varianceLin *= t.getNorm();
+		info->varianceAng *= t.getAngle();
+		info->varianceLin = info->varianceLin>0.0f?info->varianceLin:0.0001f; // epsilon if exact transform
+		info->varianceAng = info->varianceAng>0.0f?info->varianceAng:0.0001f; // epsilon if exact transform
 
 		return _pose *= t; // update
 	}

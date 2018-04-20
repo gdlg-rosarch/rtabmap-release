@@ -43,7 +43,7 @@ namespace rtabmap {
  */
 class RTABMAP_EXP GainCompensator {
 public:
-	GainCompensator(double maxCorrespondenceDistance = 0.02, double minOverlap = 0.0, double alpha = 0.01, double beta = 10);
+	GainCompensator(double maxCorrespondenceDistance = 0.02, double minOverlap = 0.05, double alpha = 0.01, double beta = 10);
 	virtual ~GainCompensator();
 
 	void feed(
@@ -73,24 +73,20 @@ public:
 
 	void apply(
 			int id,
-			pcl::PointCloud<pcl::PointXYZRGB>::Ptr & cloud,
-			bool rgb = true) const;
+			pcl::PointCloud<pcl::PointXYZRGB>::Ptr & cloud);
 	void apply(
 			int id,
 			pcl::PointCloud<pcl::PointXYZRGB>::Ptr & cloud,
-			const pcl::IndicesPtr & indices,
-			bool rgb = true) const;
+			const pcl::IndicesPtr & indices);
 	void apply(
 			int id,
 			pcl::PointCloud<pcl::PointXYZRGBNormal>::Ptr & cloud,
-			const pcl::IndicesPtr & indices,
-			bool rgb = true) const;
+			const pcl::IndicesPtr & indices);
 	void apply(
 			int id,
-			cv::Mat & image,
-			bool rgb = true) const;
+			cv::Mat & image);
 
-	double getGain(int id, double * r=0, double * g=0, double * b=0) const;
+	double getGain(int id) const;
 	int getIndex(int id) const;
 
 private:

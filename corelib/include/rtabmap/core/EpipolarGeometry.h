@@ -94,8 +94,7 @@ public:
 	static int findPairs(
 			const std::map<int, cv::KeyPoint> & wordsA,
 			const std::map<int, cv::KeyPoint> & wordsB,
-			std::list<std::pair<int, std::pair<cv::KeyPoint, cv::KeyPoint> > > & pairs,
-			bool ignoreNegativeIds = true);
+			std::list<std::pair<int, std::pair<cv::KeyPoint, cv::KeyPoint> > > & pairs);
 
 	/**
 	 * if a=[1 2 3 4 6 6], b=[1 1 2 4 5 6 6], results= [(1,1a) (2,2) (4,4) (6a,6a) (6b,6b)]
@@ -104,8 +103,7 @@ public:
 	static int findPairs(
 			const std::multimap<int, cv::KeyPoint> & wordsA,
 			const std::multimap<int, cv::KeyPoint> & wordsB,
-			std::list<std::pair<int, std::pair<cv::KeyPoint, cv::KeyPoint> > > & pairs,
-			bool ignoreNegativeIds = true);
+			std::list<std::pair<int, std::pair<cv::KeyPoint, cv::KeyPoint> > > & pairs);
 
 	/**
 	 * if a=[1 2 3 4 6 6], b=[1 1 2 4 5 6 6], results= [(2,2) (4,4)]
@@ -114,8 +112,7 @@ public:
 	static int findPairsUnique(
 			const std::multimap<int, cv::KeyPoint> & wordsA,
 			const std::multimap<int, cv::KeyPoint> & wordsB,
-			std::list<std::pair<int, std::pair<cv::KeyPoint, cv::KeyPoint> > > & pairs,
-			bool ignoreNegativeIds = true);
+			std::list<std::pair<int, std::pair<cv::KeyPoint, cv::KeyPoint> > > & pairs);
 
 	/**
 	 * if a=[1 2 3 4 6 6], b=[1 1 2 4 5 6 6], results= [(1,1a) (1,1b) (2,2) (4,4) (6a,6a) (6a,6b) (6b,6a) (6b,6b)]
@@ -124,8 +121,7 @@ public:
 	static int findPairsAll(
 			const std::multimap<int, cv::KeyPoint> & wordsA,
 			const std::multimap<int, cv::KeyPoint> & wordsB,
-			std::list<std::pair<int, std::pair<cv::KeyPoint, cv::KeyPoint> > > & pairs,
-			bool ignoreNegativeIds = true);
+			std::list<std::pair<int, std::pair<cv::KeyPoint, cv::KeyPoint> > > & pairs);
 
 	static cv::Mat linearLSTriangulation(
 			cv::Point3d u,    //homogenous image point (u,v,1)

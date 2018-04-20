@@ -156,8 +156,7 @@ bool Parameters::isFeatureParameter(const std::string & parameter)
 			group.compare("FREAK") == 0 ||
 			group.compare("BRIEF") == 0 ||
 			group.compare("GFTT") == 0 ||
-			group.compare("BRISK") == 0 ||
-			group.compare("KAZE") == 0;
+			group.compare("BRISK") == 0;
 }
 
 rtabmap::ParametersMap Parameters::getDefaultOdometryParameters(bool stereo, bool vis, bool icp)
@@ -224,15 +223,6 @@ const std::map<std::string, std::pair<bool, std::string> > & Parameters::getRemo
 	if(removedParameters_.empty())
 	{
 		// removed parameters
-
-		// 0.13.1
-		removedParameters_.insert(std::make_pair("Rtabmap/VhStrategy",            std::make_pair(true,  Parameters::kVhEpEnabled())));
-
-		// 0.12.5
-		removedParameters_.insert(std::make_pair("Grid/FullUpdate",               std::make_pair(true,  Parameters::kGridGlobalFullUpdate())));
-
-		// 0.12.1
-		removedParameters_.insert(std::make_pair("Grid/3DGroundIsObstacle",       std::make_pair(true,  Parameters::kGridGroundIsObstacle())));
 
 		// 0.11.12
 		removedParameters_.insert(std::make_pair("Optimizer/Slam2D",              std::make_pair(true,  Parameters::kRegForce3DoF())));
@@ -624,50 +614,14 @@ ParametersMap Parameters::parseArguments(int argc, char * argv[], bool onlyParam
 			{
 				for(rtabmap::ParametersMap::const_iterator iter=parameters.begin(); iter!=parameters.end(); ++iter)
 				{
-					bool ignore = false;
-					UASSERT(uSplit(iter->first, '/').size()  == 2);
-					std::string group = uSplit(iter->first, '/').front();
-#ifndef RTABMAP_GTSAM
-				   if(group.compare("GTSAM") == 0)
-				   {
-					   ignore = true;
-				   }
-#endif
-#ifndef RTABMAP_G2O
-					if(group.compare("g2o") == 0)
-					{
-						ignore = true;
-					}
-#endif
-#ifndef RTABMAP_FOVIS
-					if(group.compare("OdomFovis") == 0)
-					{
-						ignore = true;
-					}
-#endif
-#ifndef RTABMAP_VISO2
-					if(group.compare("OdomViso2") == 0)
-					{
-						ignore = true;
-					}
-#endif
-#ifndef RTABMAP_VISO2
-					if(group.compare("OdomORBSLAM2") == 0)
-					{
-						ignore = true;
-					}
-#endif
-					if(!ignore)
-					{
-						std::string str = "Param: " + iter->first + " = \"" + iter->second + "\"";
-						std::cout <<
-								str <<
-								std::setw(60 - str.size()) <<
-								" [" <<
-								rtabmap::Parameters::getDescription(iter->first).c_str() <<
-								"]" <<
-								std::endl;
-					}
+					std::string str = "Param: " + iter->first + " = \"" + iter->second + "\"";
+					std::cout <<
+							str <<
+							std::setw(60 - str.size()) <<
+							" [" <<
+							rtabmap::Parameters::getDescription(iter->first).c_str() <<
+							"]" <<
+							std::endl;
 				}
 				UWARN("App will now exit after showing default RTAB-Map parameters because "
 						 "argument \"--params\" is detected!");
@@ -683,7 +637,6 @@ ParametersMap Parameters::parseArguments(int argc, char * argv[], bool onlyParam
 					if(i < argc)
 					{
 						uInsert(out, ParametersPair(iter->first, argv[i]));
-						UINFO("Parsed parameter \"%s\"=\"%s\"", iter->first.c_str(), argv[i]);
 					}
 				}
 				else
@@ -780,19 +733,16 @@ void Parameters::readINI(const std::string & configFile, ParametersMap & paramet
 					addParameter = oldIter->second.first;
 					if(addParameter)
 					{
-						if(parameters.find(oldIter->second.second) == parameters.end())
-						{
-							key = oldIter->second.second;
-							UWARN("Parameter migration from \"%s\" to \"%s\" (value=%s, default=%s).",
-									oldIter->first.c_str(), oldIter->second.second.c_str(), iter->second, Parameters::getDefaultParameters().at(oldIter->second.second).c_str());
-						}
+						key = oldIter->second.second;
+						UWARN("Parameter migration from \"%s\" to \"%s\" (value=%s, default=%s).",
+								oldIter->first.c_str(), oldIter->second.second.c_str(), iter->second, Parameters::getDefaultParameters().at(oldIter->second.second).c_str());
 					}
 					else if(oldIter->second.second.empty())
 					{
 						UWARN("Parameter \"%s\" doesn't exist anymore.",
 									oldIter->first.c_str());
 					}
-					else if(parameters.find(oldIter->second.second) == parameters.end())
+					else
 					{
 						UWARN("Parameter \"%s\" (value=%s) doesn't exist anymore, you may want to use this similar parameter \"%s (default=%s): %s\".",
 									oldIter->first.c_str(), iter->second, oldIter->second.second.c_str(), Parameters::getDefaultParameters().at(oldIter->second.second).c_str(), Parameters::getDescription(oldIter->second.second).c_str());
@@ -811,7 +761,7 @@ void Parameters::readINI(const std::string & configFile, ParametersMap & paramet
 	{
 		ULOGGER_WARN("Section \"Core\" in %s doesn't exist... "
 				    "Ignore this warning if the ini file does not exist yet. "
-				    "The ini file will be automatically created when rtabmap will close.", configFile.c_str());
+				    "The ini file will be automatically created when this node will close.", configFile.c_str());
 	}
 }
 

@@ -49,7 +49,6 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <set>
 
 #include <pcl/visualization/mouse_event.h>
-#include <pcl/visualization/point_picking_event.h>
 #include <pcl/PCLPointCloud2.h>
 
 namespace pcl {
@@ -135,20 +134,16 @@ public:
 			const pcl::PolygonMesh::Ptr & mesh,
 			const Transform & pose = Transform::getIdentity());
 
-	// Only one texture per mesh is supported!
 	bool addCloudTextureMesh(
 			const std::string & id,
 			const pcl::TextureMesh::Ptr & textureMesh,
-			const cv::Mat & texture,
 			const Transform & pose = Transform::getIdentity());
 
 	bool addOctomap(const OctoMap * octomap, unsigned int treeDepth = 0);
 	void removeOctomap();
 
-	// Only one texture per mesh is supported!
 	bool addTextureMesh (
 		   const pcl::TextureMesh &mesh,
-		   const cv::Mat & texture, 
 		   const std::string &id = "texture",
 		   int viewport = 0);
 	bool addOccupancyGridMap(
@@ -196,15 +191,13 @@ public:
 	void addOrUpdateFrustum(
 			const std::string & id,
 			const Transform & transform,
-			const Transform & localTransform,
 			double scale,
 			const QColor & color = QColor());
 	bool updateFrustumPose(
 			const std::string & id,
 			const Transform & pose);
 	void removeFrustum(const std::string & id);
-	void removeAllFrustums(bool exceptCameraReference = false);
-	const QMap<std::string, Transform> & getAddedFrustums() const {return _frustums;}
+	void removeAllFrustums();
 
 	void addOrUpdateGraph(
 			const std::string & id,
@@ -249,7 +242,6 @@ public:
 	void setBackfaceCulling(bool enabled, bool frontfaceCulling);
 	void setRenderingRate(double rate);
 	void setLighting(bool on);
-	void setShading(bool on);
 	void setEdgeVisibility(bool visible);
 	double getRenderingRate() const;
 
@@ -276,6 +268,8 @@ public:
 	void setGridShown(bool shown);
 	void setGridCellCount(unsigned int count);
 	void setGridCellSize(float size);
+
+	void setWorkingDirectory(const QString & path) {_workingDirectory = path;}
 
 public slots:
 	void setDefaultBackgroundColor(const QColor & color);
@@ -321,7 +315,6 @@ private:
     QAction * _aSetBackgroundColor;
     QAction * _aSetRenderingRate;
     QAction * _aSetLighting;
-    QAction * _aSetFlatShading;
     QAction * _aSetEdgeVisibility;
     QAction * _aBackfaceCulling;
     QMenu * _menu;
@@ -329,7 +322,7 @@ private:
     std::set<std::string> _coordinates;
     std::set<std::string> _texts;
     std::set<std::string> _lines;
-    QMap<std::string, Transform> _frustums;
+    std::set<std::string> _frustums;
     pcl::PointCloud<pcl::PointXYZ>::Ptr _trajectory;
     unsigned int _maxTrajectorySize;
     float _frustumScale;
@@ -342,6 +335,7 @@ private:
     Transform _lastPose;
     std::list<std::string> _gridLines;
     QSet<Qt::Key> _keysPressed;
+    QString _workingDirectory;
     QColor _defaultBgColor;
     QColor _currentBgColor;
     bool _frontfaceCulling;

@@ -42,13 +42,11 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <pcl/point_types.h>
 
 #include <rtabmap/core/Link.h>
-#include <rtabmap/core/Signature.h>
 
 class Ui_DatabaseViewer;
 class QGraphicsScene;
 class QGraphicsView;
 class QLabel;
-class QDialog;
 
 namespace rtabmap
 {
@@ -56,9 +54,6 @@ class DBDriver;
 class ImageView;
 class SensorData;
 class CloudViewer;
-class OctoMap;
-class ExportCloudsDialog;
-class EditDepthArea;
 
 class RTABMAPGUI_EXP DatabaseViewer : public QMainWindow
 {
@@ -75,30 +70,25 @@ protected:
 	virtual void showEvent(QShowEvent* anEvent);
 	virtual void moveEvent(QMoveEvent* anEvent);
 	virtual void resizeEvent(QResizeEvent* anEvent);
-	virtual void keyPressEvent(QKeyEvent *event);
 	virtual void closeEvent(QCloseEvent* event);
 	virtual bool eventFilter(QObject *obj, QEvent *event);
 
 private slots:
 	void writeSettings();
-	void restoreDefaultSettings();
 	void configModified();
 	void openDatabase();
-	void updateStatistics();
-	void editDepthImage();
 	void generateGraph();
 	void exportDatabase();
 	void extractImages();
-	void exportPosesRaw();
-	void exportPosesRGBDSLAM();
-	void exportPosesKITTI();
-	void exportPosesTORO();
-	void exportPosesG2O();
 	void generateLocalGraph();
+	void generateTOROGraph();
+	void generateG2OGraph();
 	void regenerateLocalMaps();
 	void regenerateCurrentLocalMaps();
 	void view3DMap();
+	void view3DLaserScans();
 	void generate3DMap();
+	void generate3DLaserScans();
 	void detectMoreLoopClosures();
 	void refineAllNeighborLinks();
 	void refineAllLoopClosureLinks();
@@ -112,7 +102,6 @@ private slots:
 	void sliderLoopValueChanged(int);
 	void sliderIterationsValueChanged(int);
 	void updateGrid();
-	void updateOctomapView();
 	void updateGraphView();
 	void refineConstraint();
 	void addConstraint();
@@ -122,7 +111,7 @@ private slots:
 	void updateLoggerLevel();
 	void updateStereo();
 	void notifyParametersChanged(const QStringList &);
-	void setupMainLayout(bool vertical);
+	void setupMainLayout(int vertical);
 
 private:
 	QString getIniFilePath() const;
@@ -137,6 +126,7 @@ private:
 				QLabel * label,
 				QLabel * stamp,
 				rtabmap::ImageView * view,
+				rtabmap::CloudViewer * view3D,
 				QLabel * labelId,
 				QLabel * labelMapId,
 				QLabel * labelPose,
@@ -147,8 +137,10 @@ private:
 	void updateConstraintView(
 			const rtabmap::Link & link,
 			bool updateImageSliders = true,
-			const Signature & signatureFrom = Signature(0),
-			const Signature & signatureTo = Signature(0));
+			const pcl::PointCloud<pcl::PointXYZ>::Ptr & cloudFrom = pcl::PointCloud<pcl::PointXYZ>::Ptr(new pcl::PointCloud<pcl::PointXYZ>),
+			const pcl::PointCloud<pcl::PointXYZ>::Ptr & cloudTo = pcl::PointCloud<pcl::PointXYZ>::Ptr(new pcl::PointCloud<pcl::PointXYZ>),
+			const pcl::PointCloud<pcl::PointXYZ>::Ptr & scanFrom = pcl::PointCloud<pcl::PointXYZ>::Ptr(new pcl::PointCloud<pcl::PointXYZ>),
+			const pcl::PointCloud<pcl::PointXYZ>::Ptr & scanTo = pcl::PointCloud<pcl::PointXYZ>::Ptr(new pcl::PointCloud<pcl::PointXYZ>));
 	void updateConstraintButtons();
 	Link findActiveLink(int from, int to);
 	bool containsLink(
@@ -158,16 +150,15 @@ private:
 	std::multimap<int, rtabmap::Link> updateLinksWithModifications(
 			const std::multimap<int, rtabmap::Link> & edgeConstraints);
 	void updateLoopClosuresSlider(int from = 0, int to = 0);
-	void refineConstraint(int from, int to,  bool silent);
-	bool addConstraint(int from, int to, bool silent);
-	void exportPoses(int format);
+	void refineConstraint(int from, int to,  bool silent, bool updateGraph);
+	bool addConstraint(int from, int to, bool silent, bool updateGraph);
 
 private:
 	Ui_DatabaseViewer * ui_;
 	CloudViewer * constraintsViewer_;
-	CloudViewer * cloudViewer_;
+	CloudViewer * cloudViewerA_;
+	CloudViewer * cloudViewerB_;
 	CloudViewer * stereoViewer_;
-	CloudViewer * occupancyGridViewer_;
 	QList<int> ids_;
 	std::map<int, int> mapIds_;
 	QMap<int, int> idToIndex_;
@@ -185,14 +176,8 @@ private:
 	std::multimap<int, rtabmap::Link> linksAdded_;
 	std::multimap<int, rtabmap::Link> linksRemoved_;
 	std::map<int, std::pair<cv::Mat, cv::Mat> > localMaps_; // <ground, obstacles>
-	std::map<int, std::pair<float, cv::Point3f> > localMapsInfo_; // <cell size, viewpoint>
 	std::map<int, std::pair<cv::Mat, cv::Mat> > generatedLocalMaps_; // <ground, obstacles>
 	std::map<int, std::pair<float, cv::Point3f> > generatedLocalMapsInfo_; // <cell size, viewpoint>
-	std::map<int, cv::Mat> modifiedDepthImages_;
-	OctoMap * octomap_;
-	ExportCloudsDialog * exportDialog_;
-	QDialog * editDepthDialog_;
-	EditDepthArea * editDepthArea_;
 
 	bool savedMaximized_;
 	bool firstCall_;

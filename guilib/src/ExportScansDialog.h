@@ -25,15 +25,14 @@ ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#ifndef EXPORTCLOUDSDIALOG_H_
-#define EXPORTCLOUDSDIALOG_H_
+#ifndef EXPORTSCANSDIALOG_H_
+#define EXPORTSCANSDIALOG_H_
 
 #include <QDialog>
 #include <QMap>
 #include <QtCore/QSettings>
 
 #include <rtabmap/core/Signature.h>
-#include <rtabmap/core/Parameters.h>
 
 #include <pcl/point_cloud.h>
 #include <pcl/point_types.h>
@@ -41,43 +40,37 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <pcl/TextureMesh.h>
 #include <pcl/pcl_base.h>
 
-class Ui_ExportCloudsDialog;
+class Ui_ExportScansDialog;
 class QAbstractButton;
 
 namespace rtabmap {
 class ProgressDialog;
 
-class ExportCloudsDialog : public QDialog
+class ExportScansDialog : public QDialog
 {
 	Q_OBJECT
 
 public:
-	ExportCloudsDialog(QWidget *parent = 0);
+	ExportScansDialog(QWidget *parent = 0);
 
-	virtual ~ExportCloudsDialog();
+	virtual ~ExportScansDialog();
 
 	void saveSettings(QSettings & settings, const QString & group = "") const;
 	void loadSettings(QSettings & settings, const QString & group = "");
 
-	void exportClouds(
+	void exportScans(
 			const std::map<int, Transform> & poses,
-			const std::multimap<int, Link> & links,
 			const std::map<int, int> & mapIds,
 			const QMap<int, Signature> & cachedSignatures,
-			const std::map<int, std::pair<pcl::PointCloud<pcl::PointXYZRGB>::Ptr, pcl::IndicesPtr> > & cachedClouds,
-			const QString & workingDirectory,
-			const ParametersMap & parameters);
+			const std::map<int, cv::Mat> & createdScans,
+			const QString & workingDirectory);
 
-	void viewClouds(
+	void viewScans(
 			const std::map<int, Transform> & poses,
-			const std::multimap<int, Link> & links,
 			const std::map<int, int> & mapIds,
 			const QMap<int, Signature> & cachedSignatures,
-			const std::map<int, std::pair<pcl::PointCloud<pcl::PointXYZRGB>::Ptr, pcl::IndicesPtr> > & cachedClouds,
-			const QString & workingDirectory,
-			const ParametersMap & parameters);
-
-	static bool removeDirRecursively(const QString & dirName);
+			const std::map<int, cv::Mat> & createdScans,
+			const QString & workingDirectory);
 
 signals:
 	void configChanged();
@@ -85,46 +78,32 @@ signals:
 public slots:
 	void restoreDefaults();
 
-private slots:
-	void updateReconstructionFlavor();
-	void selectDistortionModel();
-	void updateMLSGrpVisibility();
-	void updateTexturingAvailability();
-	void cancel();
-
 private:
-	std::map<int, std::pair<pcl::PointCloud<pcl::PointXYZRGBNormal>::Ptr, pcl::IndicesPtr> > getClouds(
+	std::map<int, pcl::PointCloud<pcl::PointNormal>::Ptr> getScans(
 			const std::map<int, Transform> & poses,
 			const QMap<int, Signature> & cachedSignatures,
-			const std::map<int, std::pair<pcl::PointCloud<pcl::PointXYZRGB>::Ptr, pcl::IndicesPtr> > & cachedClouds,
-			const ParametersMap & parameters) const;
-	bool getExportedClouds(
+			const std::map<int, cv::Mat> & createdScans) const;
+	bool getExportedScans(
 				const std::map<int, Transform> & poses,
-				const std::multimap<int, Link> & links,
 				const std::map<int, int> & mapIds,
 				const QMap<int, Signature> & cachedSignatures,
-				const std::map<int, std::pair<pcl::PointCloud<pcl::PointXYZRGB>::Ptr, pcl::IndicesPtr> > & cachedClouds,
+				const std::map<int, cv::Mat> & createdScans,
 				const QString & workingDirectory,
-				const ParametersMap & parameters,
-				std::map<int, pcl::PointCloud<pcl::PointXYZRGBNormal>::Ptr> & clouds,
-				std::map<int, pcl::PolygonMesh::Ptr> & meshes,
-				std::map<int, pcl::TextureMesh::Ptr> & textureMeshes);
-	void saveClouds(const QString & workingDirectory, const std::map<int, Transform> & poses, const std::map<int, pcl::PointCloud<pcl::PointXYZRGBNormal>::Ptr> & clouds, bool binaryMode = true);
-	void saveMeshes(const QString & workingDirectory, const std::map<int, Transform> & poses, const std::map<int, pcl::PolygonMesh::Ptr> & meshes, bool binaryMode = true);
-	void saveTextureMeshes(const QString & workingDirectory, const std::map<int, Transform> & poses, const std::map<int, pcl::TextureMesh::Ptr> & meshes);
+				std::map<int, pcl::PointCloud<pcl::PointNormal>::Ptr> & clouds);
+	void saveScans(const QString & workingDirectory,
+			const std::map<int, Transform> & poses,
+			const std::map<int, pcl::PointCloud<pcl::PointNormal>::Ptr> & clouds,
+			bool binaryMode = true);
 
 	void setSaveButton();
 	void setOkButton();
 	void enableRegeneration(bool enabled);
-	void updateTexturingAvailability(bool isExporting);
 
 private:
-	Ui_ExportCloudsDialog * _ui;
+	Ui_ExportScansDialog * _ui;
 	ProgressDialog * _progressDialog;
-	QString _workingDirectory;
-	bool _canceled;
 };
 
 }
 
-#endif /* EXPORTCLOUDSDIALOG_H_ */
+#endif /* EXPORTSCANSDIALOG_H_ */

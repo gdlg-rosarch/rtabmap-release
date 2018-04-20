@@ -77,7 +77,6 @@ private:
 	std::multimap<int, Link> bundleLinks_;
 	std::map<int, CameraModel> bundleModels_;
 	std::map<int, int> bundlePoseReferences_;
-	int bundleSeq_;
 	Optimizer * sba_;
 };
 

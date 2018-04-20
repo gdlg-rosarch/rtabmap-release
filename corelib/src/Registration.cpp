@@ -62,7 +62,6 @@ Registration * Registration::create(Registration::Type & type, const ParametersM
 
 Registration::Registration(const ParametersMap & parameters, Registration * child) :
 	varianceFromInliersCount_(Parameters::defaultRegVarianceFromInliersCount()),
-	covarianceNormalized_(Parameters::defaultRegVarianceNormalized()),
 	force3DoF_(Parameters::defaultRegForce3DoF()),
 	child_(child)
 {
@@ -79,7 +78,6 @@ Registration::~Registration()
 void Registration::parseParameters(const ParametersMap & parameters)
 {
 	Parameters::parse(parameters, Parameters::kRegVarianceFromInliersCount(), varianceFromInliersCount_);
-	Parameters::parse(parameters, Parameters::kRegVarianceNormalized(), covarianceNormalized_);
 	Parameters::parse(parameters, Parameters::kRegForce3DoF(), force3DoF_);
 	if(child_)
 	{
@@ -195,25 +193,21 @@ Transform Registration::computeTransformationMod(
 
 	Transform t = computeTransformationImpl(from, to, guess, info);
 
-	if(info.covariance.empty())
-	{
-		info.covariance = cv::Mat::eye(6,6,CV_64FC1);
-	}
-
 	if(varianceFromInliersCount_)
 	{
 		if(info.icpInliersRatio)
 		{
-			info.covariance = cv::Mat::eye(6,6,CV_64FC1)*(info.icpInliersRatio > 0?1.0/double(info.icpInliersRatio):1.0);
+			info.varianceLin = info.icpInliersRatio > 0?1.0/double(info.icpInliersRatio):1.0;
+			info.varianceAng = info.icpInliersRatio > 0?1.0/double(info.icpInliersRatio):1.0;
 		}
 		else
 		{
-			info.covariance = cv::Mat::eye(6,6,CV_64FC1)*(info.inliers > 0?1.0/double(info.inliers):1.0);
+			info.varianceLin = info.inliers > 0?1.0f/float(info.inliers):1.0f;
+			info.varianceAng = info.inliers > 0?1.0f/float(info.inliers):1.0f;
 		}
+		info.varianceLin = info.varianceLin>0.0f?info.varianceLin:0.0001f; // epsilon if exact transform
+		info.varianceAng = info.varianceAng>0.0f?info.varianceAng:0.0001f; // epsilon if exact transform
 	}
-
-
-	normalizeCovariance(info.covariance, t);
 
 	if(child_)
 	{
@@ -237,38 +231,6 @@ Transform Registration::computeTransformationMod(
 		*infoOut = info;
 	}
 	return t;
-}
-
-void Registration::normalizeCovariance(cv::Mat & covariance, const Transform & transform) const
-{
-	UASSERT(covariance.cols == 6 && covariance.rows == 6);
-
-	if(covarianceNormalized_)
-	{
-		// normalize variance
-		float norm = transform.getNorm();
-		covariance.at<double>(0,0) *= norm;
-		covariance.at<double>(1,1) *= norm;
-		covariance.at<double>(2,2) *= norm;
-		float angle = transform.getAngle()/10.0;
-		covariance.at<double>(3,3) *= angle;
-		covariance.at<double>(4,4) *= angle;
-		covariance.at<double>(5,5) *= angle;
-	}
-
-	double epsilon = 0.000001;
-	if(covariance.at<double>(0,0)<=epsilon)
-		covariance.at<double>(0,0) = epsilon; // epsilon if exact transform
-	if(covariance.at<double>(1,1)<=epsilon)
-		covariance.at<double>(1,1) = epsilon; // epsilon if exact transform
-	if(covariance.at<double>(2,2)<=epsilon)
-		covariance.at<double>(2,2) = epsilon; // epsilon if exact transform
-	if(covariance.at<double>(3,3)<=epsilon)
-		covariance.at<double>(3,3) = epsilon; // epsilon if exact transform
-	if(covariance.at<double>(4,4)<=epsilon)
-		covariance.at<double>(4,4) = epsilon; // epsilon if exact transform
-	if(covariance.at<double>(5,5)<=epsilon)
-		covariance.at<double>(5,5) = epsilon; // epsilon if exact transform
 }
 
 }

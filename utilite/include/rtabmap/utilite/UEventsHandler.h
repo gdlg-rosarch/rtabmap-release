@@ -147,15 +147,10 @@ protected:
      * events are received. If a handling function 
      * takes too much time, the events list can grow 
      * faster than it is emptied. The event can be
-     * modified.
-     * @return "true" to notify UEventsManager that this handler took ownership of the
-     *         event (meaning it must delete it). The event will
-     *         not be dispatched to next handlers.
-     * @return "false" to let event be dispatched to next handlers (default behavior). UEventsManager
-     *         will take care of deleting the event.
+     * modified but must not be deleted.
      *
      */
-    virtual bool handleEvent(UEvent * event) = 0;
+    virtual void handleEvent(UEvent * event) = 0;
 
 protected:
     /**

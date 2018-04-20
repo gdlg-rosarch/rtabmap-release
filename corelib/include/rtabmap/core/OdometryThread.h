@@ -45,7 +45,7 @@ public:
 	virtual ~OdometryThread();
 
 protected:
-	virtual bool handleEvent(UEvent * event);
+	virtual void handleEvent(UEvent * event);
 
 private:
 	virtual void mainLoopBegin();

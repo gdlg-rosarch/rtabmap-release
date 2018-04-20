@@ -28,7 +28,6 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "rtabmap/core/Link.h"
 #include <rtabmap/utilite/ULogger.h>
 #include <rtabmap/utilite/UMath.h>
-#include <rtabmap/utilite/UConversion.h>
 #include <rtabmap/core/Compression.h>
 
 namespace rtabmap {
@@ -62,6 +61,29 @@ Link::Link(int from,
 		_userDataRaw = userData;
 	}
 }
+Link::Link(int from,
+		int to,
+		Type type,
+		const Transform & transform,
+		double rotVariance,
+		double transVariance,
+		const cv::Mat & userData) :
+	from_(from),
+	to_(to),
+	transform_(transform),
+	type_(type)
+{
+	setVariance(rotVariance, transVariance);
+
+	if(userData.type() == CV_8UC1) // Bytes
+	{
+		_userDataCompressed = userData; // assume compressed
+	}
+	else
+	{
+		_userDataRaw = userData;
+	}
+}
 
 double Link::rotVariance() const
 {
@@ -78,13 +100,24 @@ double Link::transVariance() const
 
 void Link::setInfMatrix(const cv::Mat & infMatrix) {
 	UASSERT(infMatrix.cols == 6 && infMatrix.rows == 6 && infMatrix.type() == CV_64FC1);
-	UASSERT_MSG(uIsFinite(infMatrix.at<double>(0,0)) && infMatrix.at<double>(0,0)>0, uFormat("Linear information should not be null! Value=%f (set to 1 if unknown).", infMatrix.at<double>(0,0)).c_str());
-	UASSERT_MSG(uIsFinite(infMatrix.at<double>(1,1)) && infMatrix.at<double>(1,1)>0, uFormat("Linear information should not be null! Value=%f (set to 1 if unknown).", infMatrix.at<double>(1,1)).c_str());
-	UASSERT_MSG(uIsFinite(infMatrix.at<double>(2,2)) && infMatrix.at<double>(2,2)>0, uFormat("Linear information should not be null! Value=%f (set to 1 if unknown).", infMatrix.at<double>(2,2)).c_str());
-	UASSERT_MSG(uIsFinite(infMatrix.at<double>(3,3)) && infMatrix.at<double>(3,3)>0, uFormat("Angular information should not be null! Value=%f (set to 1 if unknown).", infMatrix.at<double>(3,3)).c_str());
-	UASSERT_MSG(uIsFinite(infMatrix.at<double>(4,4)) && infMatrix.at<double>(4,4)>0, uFormat("Angular information should not be null! Value=%f (set to 1 if unknown).", infMatrix.at<double>(4,4)).c_str());
-	UASSERT_MSG(uIsFinite(infMatrix.at<double>(5,5)) && infMatrix.at<double>(5,5)>0, uFormat("Angular information should not be null! Value=%f (set to 1 if unknown).", infMatrix.at<double>(5,5)).c_str());
+	UASSERT_MSG(uIsFinite(infMatrix.at<double>(0,0)) && infMatrix.at<double>(0,0)>0, "Transitional information should not be null! (set to 1 if unknown)");
+	UASSERT_MSG(uIsFinite(infMatrix.at<double>(1,1)) && infMatrix.at<double>(1,1)>0, "Transitional information should not be null! (set to 1 if unknown)");
+	UASSERT_MSG(uIsFinite(infMatrix.at<double>(2,2)) && infMatrix.at<double>(2,2)>0, "Transitional information should not be null! (set to 1 if unknown)");
+	UASSERT_MSG(uIsFinite(infMatrix.at<double>(3,3)) && infMatrix.at<double>(3,3)>0, "Rotational information should not be null! (set to 1 if unknown)");
+	UASSERT_MSG(uIsFinite(infMatrix.at<double>(4,4)) && infMatrix.at<double>(4,4)>0, "Rotational information should not be null! (set to 1 if unknown)");
+	UASSERT_MSG(uIsFinite(infMatrix.at<double>(5,5)) && infMatrix.at<double>(5,5)>0, "Rotational information should not be null! (set to 1 if unknown)");
 	infMatrix_ = infMatrix;
+}
+void Link::setVariance(double rotVariance, double transVariance) {
+	UASSERT(uIsFinite(rotVariance) && rotVariance>0);
+	UASSERT(uIsFinite(transVariance) && transVariance>0);
+	infMatrix_ = cv::Mat::eye(6,6,CV_64FC1);
+	infMatrix_.at<double>(0,0) = 1.0/transVariance;
+	infMatrix_.at<double>(1,1) = 1.0/transVariance;
+	infMatrix_.at<double>(2,2) = 1.0/transVariance;
+	infMatrix_.at<double>(3,3) = 1.0/rotVariance;
+	infMatrix_.at<double>(4,4) = 1.0/rotVariance;
+	infMatrix_.at<double>(5,5) = 1.0/rotVariance;
 }
 
 void Link::uncompressUserData()
@@ -117,7 +150,7 @@ Link Link::merge(const Link & link, Type outputType) const
 			link.to(),
 			outputType,
 			transform_.isNull()?Transform():transform_ * link.transform(), // FIXME, should be inf1^-1(inf1*t1 + inf2*t2)
-			transform_.isNull()?cv::Mat::eye(6,6,CV_64FC1):(infMatrix_.inv() + link.infMatrix().inv()).inv());
+			transform_.isNull()?cv::Mat::eye(6,6,CV_64FC1):infMatrix_ + link.infMatrix());
 }
 
 Link Link::inverse() const

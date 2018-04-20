@@ -190,15 +190,13 @@ void UEventsManager::dispatchEvents()
 	// Past events to handlers
 	for(it=eventsBuf.begin(); it!=eventsBuf.end(); ++it)
 	{
-		if(!dispatchEvent(it->first, it->second))
-		{
-			delete it->first;
-		}
+		dispatchEvent(it->first, it->second);
+		delete it->first;
 	}
     eventsBuf.clear();
 }
 
-bool UEventsManager::dispatchEvent(UEvent * event, const UEventsSender * sender)
+void UEventsManager::dispatchEvent(UEvent * event, const UEventsSender * sender)
 {
 	std::list<UEventsHandler*> handlers;
 
@@ -215,9 +213,7 @@ bool UEventsManager::dispatchEvent(UEvent * event, const UEventsSender * sender)
 		handlers = handlers_;
 	}
 
-	bool handled = false;
-
-	for(std::list<UEventsHandler*>::iterator it=handlers.begin(); it!=handlers.end() && !handled; ++it)
+	for(std::list<UEventsHandler*>::iterator it=handlers.begin(); it!=handlers.end(); ++it)
 	{
 		// Check if the handler is still in the
 		// handlers_ list (may be changed if addHandler() or
@@ -232,14 +228,13 @@ bool UEventsManager::dispatchEvent(UEvent * event, const UEventsSender * sender)
 			{
 				// To be able to add/remove an handler in a handleEvent call (without a deadlock)
 				// @see _addHandler(), _removeHandler()
-				handled = handler->handleEvent(event);
+				handler->handleEvent(event);
 			}
 
 			handlersMutex_.lock();
 		}
 	}
 	handlersMutex_.unlock();
-	return handled;
 }
 
 void UEventsManager::_addHandler(UEventsHandler* handler)
@@ -314,10 +309,8 @@ void UEventsManager::_postEvent(UEvent * event, bool async, const UEventsSender 
     	}
     	else
     	{
-    		if(!dispatchEvent(event, sender))
-    		{
-    			delete event;
-    		}
+    		dispatchEvent(event, sender);
+    		delete event;
     	}
     }
     else

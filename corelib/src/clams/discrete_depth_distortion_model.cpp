@@ -40,13 +40,10 @@ using namespace Eigen;
 namespace clams
 {
 
-  DiscreteFrustum::DiscreteFrustum(int smoothing, double bin_depth, double max_dist) :
-    max_dist_(max_dist),
+  DiscreteFrustum::DiscreteFrustum(int smoothing, double bin_depth) :
+    max_dist_(10),
     bin_depth_(bin_depth)
   {
-    UASSERT(max_dist_ >= bin_depth_);
-    UASSERT(bin_depth_>0.0);
-    UASSERT(smoothing>=1);
     num_bins_ = ceil(max_dist_ / bin_depth_);
     counts_ = VectorXf::Ones(num_bins_) * smoothing;
     total_numerators_ = VectorXf::Ones(num_bins_) * smoothing;
@@ -156,57 +153,6 @@ namespace clams
       UDEBUG("Frustum: multipliers=%d", multipliers_.rows());
     }
 
-  std::set<size_t> DiscreteDepthDistortionModel::getDivisors(const size_t &num)
-  {
-    std::set<size_t> divisors;
-    for(size_t i = 1; i <= num; i++)
-    {
-      if(num % i == 0)
-      {
-        divisors.insert(i);
-      }
-    }
-    return divisors;
-  }
-
-  size_t DiscreteDepthDistortionModel::getClosestToRef(const std::set<size_t> &divisors, const double &ref)
-  {
-    std::set<size_t>::iterator low, prev;
-    low = divisors.lower_bound(ref);
-    if(low == divisors.end())
-    {
-      return *(--divisors.end());
-    }
-    else if(low == divisors.begin())
-    {
-      return *low;
-    }
-    else
-    {
-      prev = low;
-      --prev;
-      if((ref - *prev) <= (*low - ref))
-      {
-        return *prev;
-      }
-      else
-      {
-        return *low;
-      }
-    }
-  }
-
-  void DiscreteDepthDistortionModel::getBinSize(const size_t &width, const size_t &height, size_t &bin_width, size_t &bin_height) {
-    double ratio = width / static_cast<double>(height);
-    std::set<size_t> divisors = getDivisors(width);
-    double ref_bin_width = 8;
-    bin_width = getClosestToRef(divisors, ref_bin_width);
-    divisors = getDivisors(height);
-    double ref_bin_height = ref_bin_width / ratio;
-    bin_height = getClosestToRef(divisors, ref_bin_height);
-  }
-
-
   DiscreteDepthDistortionModel::DiscreteDepthDistortionModel(const DiscreteDepthDistortionModel& other)
   {
     *this = other;
@@ -234,8 +180,7 @@ namespace clams
   DiscreteDepthDistortionModel::DiscreteDepthDistortionModel(int width, int height,
                                                              int bin_width, int bin_height,
                                                              double bin_depth,
-                                                             int smoothing,
-															 double max_depth) :
+                                                             int smoothing) :
     width_(width),
     height_(height),
     bin_width_(bin_width),
@@ -252,7 +197,7 @@ namespace clams
     for(size_t i = 0; i < frustums_.size(); ++i) {
       frustums_[i].resize(num_bins_x_, NULL);
       for(size_t j = 0; j < frustums_[i].size(); ++j)
-        frustums_[i][j] = new DiscreteFrustum(smoothing, bin_depth, max_depth);
+        frustums_[i][j] = new DiscreteFrustum(smoothing, bin_depth);
     }
 
     training_samples_ = 0;

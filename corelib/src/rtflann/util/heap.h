@@ -33,7 +33,6 @@
 
 #include <algorithm>
 #include <vector>
-#include <rtabmap/utilite/ULogger.h>
 
 namespace rtflann
 {
@@ -88,15 +87,6 @@ public:
     }
 
     /**
-	 *
-	 * Returns: heap size
-	 */
-	int capacity()
-	{
-		return length;
-	}
-
-    /**
      * Tests if the heap is empty
      *
      * Returns: true is heap empty, false otherwise
@@ -139,7 +129,6 @@ public:
             return;
         }
 
-        UASSERT(heap.size() < heap.capacity());
         heap.push_back(value);
         static CompareT compareT;
         std::push_heap(heap.begin(), heap.end(), compareT);

@@ -360,7 +360,8 @@ Transform RegistrationIcp::computeTransformationImpl(
 							info.icpTranslation,
 							info.icpRotation);
 
-					info.covariance = cv::Mat::eye(6,6,CV_64FC1)*(variance>0.0001?variance:0.0001); // epsilon if exact transform
+					info.varianceLin = variance>0.0f?variance:0.0001; // epsilon if exact transform
+					info.varianceAng = variance>0.0f?variance:0.0001; // epsilon if exact transform
 					info.icpInliersRatio = correspondencesRatio;
 
 					if(correspondencesRatio < _correspondenceRatio)

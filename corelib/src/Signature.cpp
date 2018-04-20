@@ -44,8 +44,7 @@ Signature::Signature() :
 	_saved(false),
 	_modified(true),
 	_linksModified(true),
-	_enabled(false),
-	_invalidWordsCount(0)
+	_enabled(false)
 {
 }
 
@@ -67,7 +66,6 @@ Signature::Signature(
 	_modified(true),
 	_linksModified(true),
 	_enabled(false),
-	_invalidWordsCount(0),
 	_pose(pose),
 	_groundTruthPose(groundTruthPose),
 	_sensorData(sensorData)
@@ -89,7 +87,6 @@ Signature::Signature(const SensorData & data) :
 	_modified(true),
 	_linksModified(true),
 	_enabled(false),
-	_invalidWordsCount(0),
 	_pose(Transform::getIdentity()),
 	_groundTruthPose(data.groundTruth()),
 	_sensorData(data)
@@ -120,7 +117,7 @@ void Signature::addLink(const Link & link)
 {
 	UDEBUG("Add link %d to %d (type=%d var=%f,%f)", link.to(), this->id(), (int)link.type(), link.transVariance(), link.rotVariance());
 	UASSERT_MSG(link.from() == this->id(), uFormat("%d->%d for signature %d (type=%d)", link.from(), link.to(), this->id(), link.type()).c_str());
-	UASSERT_MSG((link.to() != this->id()) || link.type()==Link::kPosePrior, uFormat("%d->%d for signature %d (type=%d)", link.from(), link.to(), this->id(), link.type()).c_str());
+	UASSERT_MSG(link.to() != this->id(), uFormat("%d->%d for signature %d (type=%d)", link.from(), link.to(), this->id(), link.type()).c_str());
 	std::pair<std::map<int, Link>::iterator, bool> pair = _links.insert(std::make_pair(link.to(), link));
 	UASSERT_MSG(pair.second, uFormat("Link %d (type=%d) already added to signature %d!", link.to(), link.type(), this->id()).c_str());
 	_linksModified = true;
@@ -181,12 +178,10 @@ float Signature::compareTo(const Signature & s) const
 {
 	float similarity = 0.0f;
 	const std::multimap<int, cv::KeyPoint> & words = s.getWords();
-
-	if(!s.isBadSignature() && !this->isBadSignature())
+	if(words.size() != 0 && _words.size() != 0)
 	{
 		std::list<std::pair<int, std::pair<cv::KeyPoint, cv::KeyPoint> > > pairs;
-		int totalWords = ((int)_words.size()-_invalidWordsCount)>((int)words.size()-s.getInvalidWordsCount())?((int)_words.size()-_invalidWordsCount):((int)words.size()-s.getInvalidWordsCount());
-		UASSERT(totalWords > 0);
+		unsigned int totalWords = _words.size()>words.size()?_words.size():words.size();
 		EpipolarGeometry::findPairs(words, _words, pairs);
 
 		similarity = float(pairs.size()) / float(totalWords);
@@ -201,15 +196,7 @@ void Signature::changeWordsRef(int oldWordId, int activeWordId)
 	{
 		std::list<cv::Point3f> pts = uValues(_words3, oldWordId);
 		std::list<cv::Mat> descriptors = uValues(_wordsDescriptors, oldWordId);
-		if(oldWordId<=0)
-		{
-			_invalidWordsCount-=(int)_words.erase(oldWordId);
-			UASSERT(_invalidWordsCount>=0);
-		}
-		else
-		{
-			_words.erase(oldWordId);
-		}
+		_words.erase(oldWordId);
 		_words3.erase(oldWordId);
 		_wordsDescriptors.erase(oldWordId);
 		_wordsChanged.insert(std::make_pair(oldWordId, activeWordId));
@@ -228,24 +215,9 @@ void Signature::changeWordsRef(int oldWordId, int activeWordId)
 	}
 }
 
-void Signature::setWords(const std::multimap<int, cv::KeyPoint> & words)
-{
-	_enabled = false;
-	_words = words;
-	_invalidWordsCount = 0;
-	for(std::multimap<int, cv::KeyPoint>::iterator iter=_words.begin(); iter!=_words.end(); ++iter)
-	{
-		if(iter->first>0)
-		{
-			break;
-		}
-		++_invalidWordsCount;
-	}
-}
-
 bool Signature::isBadSignature() const
 {
-	return _words.size()-_invalidWordsCount <= 0;
+	return !_words.size();
 }
 
 void Signature::removeAllWords()
@@ -253,20 +225,11 @@ void Signature::removeAllWords()
 	_words.clear();
 	_words3.clear();
 	_wordsDescriptors.clear();
-	_invalidWordsCount = 0;
 }
 
 void Signature::removeWord(int wordId)
 {
-	if(wordId<=0)
-	{
-		_invalidWordsCount-=(int)_words.erase(wordId);
-		UASSERT(_invalidWordsCount>=0);
-	}
-	else
-	{
-		_words.erase(wordId);
-	}
+	_words.erase(wordId);
 	_words3.erase(wordId);
 	_wordsDescriptors.clear();
 }

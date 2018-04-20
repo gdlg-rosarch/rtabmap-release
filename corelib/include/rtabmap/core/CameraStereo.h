@@ -42,7 +42,10 @@ class Camera;
 
 namespace sl
 {
+namespace zed
+{
 class Camera;
+}
 }
 
 namespace rtabmap
@@ -118,7 +121,7 @@ public:
 			int deviceId,
 			int resolution = 2, // 0=HD2K, 1=HD1080, 2=HD720, 3=VGA
 			int quality = 1,    // 0=NONE, 1=PERFORMANCE, 2=QUALITY
-			int sensingMode = 0,// 0=STANDARD, 1=FILL
+			int sensingMode = 1,// 0=FULL, 1=RAW
 			int confidenceThr = 100,
 			bool computeOdometry = false,
 			float imageRate=0.0f,
@@ -127,7 +130,7 @@ public:
 	CameraStereoZed(
 			const std::string & svoFilePath,
 			int quality = 1,    // 0=NONE, 1=PERFORMANCE, 2=QUALITY
-			int sensingMode = 0,// 0=STANDARD, 1=FILL
+			int sensingMode = 1,// 0=FULL, 1=RAW
 			int confidenceThr = 100,
 			bool computeOdometry = false,
 			float imageRate=0.0f,
@@ -145,7 +148,7 @@ protected:
 
 private:
 #ifdef RTABMAP_ZED
-	sl::Camera * zed_;
+	sl::zed::Camera * zed_;
 	StereoCameraModel stereoModel_;
 	CameraVideo::Source src_;
 	int usbDevice_;

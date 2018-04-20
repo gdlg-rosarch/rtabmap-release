@@ -413,21 +413,17 @@ cv::Mat EpipolarGeometry::findFFromCalibratedStereoCameras(double fx, double fy,
 int EpipolarGeometry::findPairs(
 		const std::map<int, cv::KeyPoint> & wordsA,
 		const std::map<int, cv::KeyPoint> & wordsB,
-		std::list<std::pair<int, std::pair<cv::KeyPoint, cv::KeyPoint> > > & pairs,
-		bool ignoreInvalidIds)
+		std::list<std::pair<int, std::pair<cv::KeyPoint, cv::KeyPoint> > > & pairs)
 {
 	int realPairsCount = 0;
 	pairs.clear();
 	for(std::map<int, cv::KeyPoint>::const_iterator i=wordsA.begin(); i!=wordsA.end(); ++i)
 	{
-		if(!ignoreInvalidIds || (ignoreInvalidIds && i->first>=0))
+		std::map<int, cv::KeyPoint>::const_iterator ptB = wordsB.find(i->first);
+		if(ptB != wordsB.end())
 		{
-			std::map<int, cv::KeyPoint>::const_iterator ptB = wordsB.find(i->first);
-			if(ptB != wordsB.end())
-			{
-				pairs.push_back(std::pair<int, std::pair<cv::KeyPoint, cv::KeyPoint> >(i->first, std::pair<cv::KeyPoint, cv::KeyPoint>(i->second, ptB->second)));
-				++realPairsCount;
-			}
+			pairs.push_back(std::pair<int, std::pair<cv::KeyPoint, cv::KeyPoint> >(i->first, std::pair<cv::KeyPoint, cv::KeyPoint>(i->second, ptB->second)));
+			++realPairsCount;
 		}
 	}
 	return realPairsCount;
@@ -439,8 +435,7 @@ int EpipolarGeometry::findPairs(
  */
 int EpipolarGeometry::findPairs(const std::multimap<int, cv::KeyPoint> & wordsA,
 		const std::multimap<int, cv::KeyPoint> & wordsB,
-		std::list<std::pair<int, std::pair<cv::KeyPoint, cv::KeyPoint> > > & pairs,
-		bool ignoreInvalidIds)
+		std::list<std::pair<int, std::pair<cv::KeyPoint, cv::KeyPoint> > > & pairs)
 {
 	const std::list<int> & ids = uUniqueKeys(wordsA);
 	std::multimap<int, cv::KeyPoint>::const_iterator iterA;
@@ -449,17 +444,14 @@ int EpipolarGeometry::findPairs(const std::multimap<int, cv::KeyPoint> & wordsA,
 	int realPairsCount = 0;
 	for(std::list<int>::const_iterator i=ids.begin(); i!=ids.end(); ++i)
 	{
-		if(!ignoreInvalidIds || (ignoreInvalidIds && *i >= 0))
+		iterA = wordsA.find(*i);
+		iterB = wordsB.find(*i);
+		while(iterA != wordsA.end() && iterB != wordsB.end() && (*iterA).first == (*iterB).first && (*iterA).first == *i)
 		{
-			iterA = wordsA.find(*i);
-			iterB = wordsB.find(*i);
-			while(iterA != wordsA.end() && iterB != wordsB.end() && (*iterA).first == (*iterB).first && (*iterA).first == *i)
-			{
-				pairs.push_back(std::pair<int, std::pair<cv::KeyPoint, cv::KeyPoint> >(*i, std::pair<cv::KeyPoint, cv::KeyPoint>((*iterA).second, (*iterB).second)));
-				++iterA;
-				++iterB;
-				++realPairsCount;
-			}
+			pairs.push_back(std::pair<int, std::pair<cv::KeyPoint, cv::KeyPoint> >(*i, std::pair<cv::KeyPoint, cv::KeyPoint>((*iterA).second, (*iterB).second)));
+			++iterA;
+			++iterB;
+			++realPairsCount;
 		}
 	}
 	return realPairsCount;
@@ -472,28 +464,24 @@ int EpipolarGeometry::findPairs(const std::multimap<int, cv::KeyPoint> & wordsA,
 int EpipolarGeometry::findPairsUnique(
 		const std::multimap<int, cv::KeyPoint> & wordsA,
 		const std::multimap<int, cv::KeyPoint> & wordsB,
-		std::list<std::pair<int, std::pair<cv::KeyPoint, cv::KeyPoint> > > & pairs,
-		bool ignoreInvalidIds)
+		std::list<std::pair<int, std::pair<cv::KeyPoint, cv::KeyPoint> > > & pairs)
 {
 	const std::list<int> & ids = uUniqueKeys(wordsA);
 	int realPairsCount = 0;
 	pairs.clear();
 	for(std::list<int>::const_iterator i=ids.begin(); i!=ids.end(); ++i)
 	{
-		if(!ignoreInvalidIds || (ignoreInvalidIds && *i>=0))
+		std::list<cv::KeyPoint> ptsA = uValues(wordsA, *i);
+		std::list<cv::KeyPoint> ptsB = uValues(wordsB, *i);
+		if(ptsA.size() == 1 && ptsB.size() == 1)
 		{
-			std::list<cv::KeyPoint> ptsA = uValues(wordsA, *i);
-			std::list<cv::KeyPoint> ptsB = uValues(wordsB, *i);
-			if(ptsA.size() == 1 && ptsB.size() == 1)
-			{
-				pairs.push_back(std::pair<int, std::pair<cv::KeyPoint, cv::KeyPoint> >(*i, std::pair<cv::KeyPoint, cv::KeyPoint>(ptsA.front(), ptsB.front())));
-				++realPairsCount;
-			}
-			else if(ptsA.size()>1 && ptsB.size()>1)
-			{
-				// just update the count
-				realPairsCount += ptsA.size() > ptsB.size() ? ptsB.size() : ptsA.size();
-			}
+			pairs.push_back(std::pair<int, std::pair<cv::KeyPoint, cv::KeyPoint> >(*i, std::pair<cv::KeyPoint, cv::KeyPoint>(ptsA.front(), ptsB.front())));
+			++realPairsCount;
+		}
+		else if(ptsA.size()>1 && ptsB.size()>1)
+		{
+			// just update the count
+			realPairsCount += ptsA.size() > ptsB.size() ? ptsB.size() : ptsA.size();
 		}
 	}
 	return realPairsCount;
@@ -505,8 +493,7 @@ int EpipolarGeometry::findPairsUnique(
  */
 int EpipolarGeometry::findPairsAll(const std::multimap<int, cv::KeyPoint> & wordsA,
 		const std::multimap<int, cv::KeyPoint> & wordsB,
-		std::list<std::pair<int, std::pair<cv::KeyPoint, cv::KeyPoint> > > & pairs,
-		bool ignoreInvalidIds)
+		std::list<std::pair<int, std::pair<cv::KeyPoint, cv::KeyPoint> > > & pairs)
 {
 	UTimer timer;
 	timer.start();
@@ -515,19 +502,16 @@ int EpipolarGeometry::findPairsAll(const std::multimap<int, cv::KeyPoint> & word
 	int realPairsCount = 0;;
 	for(std::list<int>::const_iterator iter=ids.begin(); iter!=ids.end(); ++iter)
 	{
-		if(!ignoreInvalidIds || (ignoreInvalidIds && *iter>=0))
+		std::list<cv::KeyPoint> ptsA = uValues(wordsA, *iter);
+		std::list<cv::KeyPoint> ptsB = uValues(wordsB, *iter);
+
+		realPairsCount += ptsA.size() > ptsB.size() ? ptsB.size() : ptsA.size();
+
+		for(std::list<cv::KeyPoint>::iterator jter=ptsA.begin(); jter!=ptsA.end(); ++jter)
 		{
-			std::list<cv::KeyPoint> ptsA = uValues(wordsA, *iter);
-			std::list<cv::KeyPoint> ptsB = uValues(wordsB, *iter);
-
-			realPairsCount += ptsA.size() > ptsB.size() ? ptsB.size() : ptsA.size();
-
-			for(std::list<cv::KeyPoint>::iterator jter=ptsA.begin(); jter!=ptsA.end(); ++jter)
+			for(std::list<cv::KeyPoint>::iterator kter=ptsB.begin(); kter!=ptsB.end(); ++kter)
 			{
-				for(std::list<cv::KeyPoint>::iterator kter=ptsB.begin(); kter!=ptsB.end(); ++kter)
-				{
-					pairs.push_back(std::pair<int, std::pair<cv::KeyPoint, cv::KeyPoint> >(*iter, std::pair<cv::KeyPoint, cv::KeyPoint>(*jter, *kter)));
-				}
+				pairs.push_back(std::pair<int, std::pair<cv::KeyPoint, cv::KeyPoint> >(*iter, std::pair<cv::KeyPoint, cv::KeyPoint>(*jter, *kter)));
 			}
 		}
 	}

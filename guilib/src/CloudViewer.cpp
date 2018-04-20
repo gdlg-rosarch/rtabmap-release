@@ -59,8 +59,6 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <vtkPNGReader.h>
 #include <vtkTIFFReader.h>
 #include <vtkOpenGLRenderWindow.h>
-#include <vtkPointPicker.h>
-#include <opencv/vtkImageMatSource.h>
 
 #ifdef RTABMAP_OCTOMAP
 #include <rtabmap/core/OctoMap.h>
@@ -108,70 +106,6 @@ public:
 
 		//rwi->Render();
 	}
-
-protected:
-	virtual void OnLeftButtonDown()
-	{
-		// http://www.vtk.org/Wiki/VTK/Examples/Cxx/Interaction/DoubleClick
-		// http://www.vtk.org/Wiki/VTK/Examples/Cxx/Interaction/PointPicker
-
-		this->NumberOfClicks++;
-		int pickPosition[2];
-		this->GetInteractor()->GetEventPosition(pickPosition);
-
-		int xdist = pickPosition[0] - this->PreviousPosition[0];
-		int ydist = pickPosition[1] - this->PreviousPosition[1];
-
-		this->PreviousPosition[0] = pickPosition[0];
-		this->PreviousPosition[1] = pickPosition[1];
-
-		int moveDistance = (int)sqrt((double)(xdist*xdist + ydist*ydist));
-
-		// Reset numClicks - If mouse moved further than resetPixelDistance
-		if(moveDistance > this->ResetPixelDistance)
-		{
-			this->NumberOfClicks = 1;
-		}
-
-		if(this->NumberOfClicks == 2)
-		{
-			this->NumberOfClicks = 0;
-
-			this->Interactor->GetPicker()->Pick(pickPosition[0], pickPosition[1],
-					0,  // always zero.
-					this->Interactor->GetRenderWindow()->GetRenderers()->GetFirstRenderer());
-			double picked[3];
-			this->Interactor->GetPicker()->GetPickPosition(picked);
-			UINFO("Double clicked! Picked value: %f %f %f", picked[0], picked[1], picked[2]);
-
-			vtkCamera *camera = this->CurrentRenderer->GetActiveCamera();
-			double position[3];
-			double focal[3];
-			camera->GetPosition(position[0], position[1], position[2]);
-			camera->GetFocalPoint(focal[0], focal[1], focal[2]);
-			//camera->SetPosition (position[0] + (picked[0]-focal[0]), position[1] + (picked[1]-focal[1]), position[2] + (picked[2]-focal[2]));
-			camera->SetFocalPoint (picked[0], picked[1], picked[2]);
-			camera->OrthogonalizeViewUp();
-
-			if (this->AutoAdjustCameraClippingRange)
-			{
-				this->CurrentRenderer->ResetCameraClippingRange();
-			}
-
-			if (this->Interactor->GetLightFollowCamera())
-			{
-				this->CurrentRenderer->UpdateLightsGeometryToFollowCamera();
-			}
-		}
-
-		// Forward events
-		PCLVisualizerInteractorStyle::OnLeftButtonDown();
-	}
-
-private:
-	unsigned int NumberOfClicks;
-	int PreviousPosition[2];
-	int ResetPixelDistance;
 };
 
 
@@ -193,7 +127,6 @@ CloudViewer::CloudViewer(QWidget *parent) :
 		_aSetBackgroundColor(0),
 		_aSetRenderingRate(0),
 		_aSetLighting(0),
-		_aSetFlatShading(0),
 		_aSetEdgeVisibility(0),
 		_aBackfaceCulling(0),
 		_menu(0),
@@ -205,6 +138,7 @@ CloudViewer::CloudViewer(QWidget *parent) :
 		_gridCellSize(1),
 		_lastCameraOrientation(0,0,0),
 		_lastCameraPose(0,0,0),
+		_workingDirectory("."),
 		_defaultBgColor(Qt::black),
 		_currentBgColor(Qt::black),
 		_frontfaceCulling(false),
@@ -219,7 +153,7 @@ CloudViewer::CloudViewer(QWidget *parent) :
 		argc, 
 		0, 
 		"PCLVisualizer", 
-		vtkSmartPointer<MyInteractorStyle>(new MyInteractorStyle()),
+		vtkSmartPointer<MyInteractorStyle>(new MyInteractorStyle()), 
 		false);
 
 	_visualizer->setShowFPS(false);
@@ -230,12 +164,6 @@ CloudViewer::CloudViewer(QWidget *parent) :
 	// the "Invalid drawable" warning when the view is not visible.
 	//_visualizer->setupInteractor(this->GetInteractor(), this->GetRenderWindow());
 	this->GetInteractor()->SetInteractorStyle (_visualizer->getInteractorStyle());
-	// setup a simple point picker
-	vtkSmartPointer<vtkPointPicker> pp = vtkSmartPointer<vtkPointPicker>::New ();
-	UDEBUG("pick tolerance=%f", pp->GetTolerance());
-	pp->SetTolerance (pp->GetTolerance()/2.0);
-	this->GetInteractor()->SetPicker (pp);
-
 	setRenderingRate(_renderingRate);
 
 	_visualizer->setCameraPosition(
@@ -315,9 +243,6 @@ void CloudViewer::createMenu()
 	_aSetLighting = new QAction("Lighting", this);
 	_aSetLighting->setCheckable(true);
 	_aSetLighting->setChecked(false);
-	_aSetFlatShading = new QAction("Flat Shading", this);
-	_aSetFlatShading->setCheckable(true);
-	_aSetFlatShading->setChecked(false);
 	_aSetEdgeVisibility = new QAction("Show edges", this);
 	_aSetEdgeVisibility->setCheckable(true);
 	_aSetEdgeVisibility->setChecked(false);
@@ -361,7 +286,6 @@ void CloudViewer::createMenu()
 	_menu->addAction(_aSetBackgroundColor);
 	_menu->addAction(_aSetRenderingRate);
 	_menu->addAction(_aSetLighting);
-	_menu->addAction(_aSetFlatShading);
 	_menu->addAction(_aSetEdgeVisibility);
 	_menu->addAction(_aBackfaceCulling);
 }
@@ -626,7 +550,6 @@ bool CloudViewer::addCloudMesh(
 	if(_visualizer->addPolygonMesh<pcl::PointXYZ>(cloud, polygons, id))
 	{
 		_visualizer->getCloudActorMap()->find(id)->second.actor->GetProperty()->SetLighting(_aSetLighting->isChecked());
-		_visualizer->getCloudActorMap()->find(id)->second.actor->GetProperty()->SetInterpolation(_aSetFlatShading->isChecked()?VTK_FLAT:VTK_PHONG);
 		_visualizer->getCloudActorMap()->find(id)->second.actor->GetProperty()->SetEdgeVisibility(_aSetEdgeVisibility->isChecked());
 		_visualizer->getCloudActorMap()->find(id)->second.actor->GetProperty()->SetBackfaceCulling(_aBackfaceCulling->isChecked());
 		_visualizer->getCloudActorMap()->find(id)->second.actor->GetProperty()->SetFrontfaceCulling(_frontfaceCulling);
@@ -652,7 +575,6 @@ bool CloudViewer::addCloudMesh(
 	if(_visualizer->addPolygonMesh<pcl::PointXYZRGB>(cloud, polygons, id))
 	{
 		_visualizer->getCloudActorMap()->find(id)->second.actor->GetProperty()->SetLighting(_aSetLighting->isChecked());
-		_visualizer->getCloudActorMap()->find(id)->second.actor->GetProperty()->SetInterpolation(_aSetFlatShading->isChecked()?VTK_FLAT:VTK_PHONG);
 		_visualizer->getCloudActorMap()->find(id)->second.actor->GetProperty()->SetEdgeVisibility(_aSetEdgeVisibility->isChecked());
 		_visualizer->getCloudActorMap()->find(id)->second.actor->GetProperty()->SetBackfaceCulling(_aBackfaceCulling->isChecked());
 		_visualizer->getCloudActorMap()->find(id)->second.actor->GetProperty()->SetFrontfaceCulling(_frontfaceCulling);
@@ -678,7 +600,6 @@ bool CloudViewer::addCloudMesh(
 	if(_visualizer->addPolygonMesh<pcl::PointXYZRGBNormal>(cloud, polygons, id))
 	{
 		_visualizer->getCloudActorMap()->find(id)->second.actor->GetProperty()->SetLighting(_aSetLighting->isChecked());
-		_visualizer->getCloudActorMap()->find(id)->second.actor->GetProperty()->SetInterpolation(_aSetFlatShading->isChecked()?VTK_FLAT:VTK_PHONG);
 		_visualizer->getCloudActorMap()->find(id)->second.actor->GetProperty()->SetEdgeVisibility(_aSetEdgeVisibility->isChecked());
 		_visualizer->getCloudActorMap()->find(id)->second.actor->GetProperty()->SetBackfaceCulling(_aBackfaceCulling->isChecked());
 		_visualizer->getCloudActorMap()->find(id)->second.actor->GetProperty()->SetFrontfaceCulling(_frontfaceCulling);
@@ -717,7 +638,6 @@ bool CloudViewer::addCloudMesh(
 bool CloudViewer::addCloudTextureMesh(
 	const std::string & id,
 	const pcl::TextureMesh::Ptr & textureMesh,
-	const cv::Mat & texture,
 	const Transform & pose)
 {
 	if(_addedClouds.contains(id))
@@ -726,10 +646,9 @@ bool CloudViewer::addCloudTextureMesh(
 	}
 
 	UDEBUG("Adding %s", id.c_str());
-	if(this->addTextureMesh(*textureMesh, texture, id))
+	if(this->addTextureMesh(*textureMesh, id))
 	{
 		_visualizer->getCloudActorMap()->find(id)->second.actor->GetProperty()->SetLighting(_aSetLighting->isChecked());
-		_visualizer->getCloudActorMap()->find(id)->second.actor->GetProperty()->SetInterpolation(_aSetFlatShading->isChecked()?VTK_FLAT:VTK_PHONG);
 		_visualizer->getCloudActorMap()->find(id)->second.actor->GetProperty()->SetEdgeVisibility(_aSetEdgeVisibility->isChecked());
 		_visualizer->getCloudActorMap()->find(id)->second.actor->GetProperty()->SetBackfaceCulling(_aBackfaceCulling->isChecked());
 		_visualizer->getCloudActorMap()->find(id)->second.actor->GetProperty()->SetFrontfaceCulling(_frontfaceCulling);
@@ -753,15 +672,11 @@ bool CloudViewer::addOctomap(const OctoMap * octomap, unsigned int treeDepth)
 
 	pcl::IndicesPtr obstacles(new std::vector<int>);
 
-	if(treeDepth == 0 || treeDepth > octomap->octree()->getTreeDepth())
+	if(treeDepth > octomap->octree()->getTreeDepth())
 	{
-		if(treeDepth>0)
-		{
-			UWARN("Tree depth requested (%d) is deeper than the "
-				  "actual maximum tree depth of %d. Using maximum depth.",
-				  (int)treeDepth, (int)octomap->octree()->getTreeDepth());
-		}
-		treeDepth = octomap->octree()->getTreeDepth();
+		UWARN("Tree depth requested (%d) is deeper than the "
+			  "actual maximum tree depth of %d. Using maximum depth.",
+			  (int)treeDepth, (int)octomap->octree()->getTreeDepth());
 	}
 
 	pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud = octomap->createCloud(treeDepth, obstacles.get());
@@ -854,13 +769,133 @@ void CloudViewer::removeOctomap()
 #endif
 }
 
+// Copied from PCL 1.8
+int textureFromTexMaterial (const pcl::TexMaterial& tex_mat,
+                            vtkTexture* vtk_tex)
+{
+  if (tex_mat.tex_file == "")
+  {
+    PCL_WARN ("[PCLVisualizer::textureFromTexMaterial] No texture file given for material %s!\n",
+               tex_mat.tex_name.c_str ());
+    return (-1);
+  }
+
+  boost::filesystem::path full_path (tex_mat.tex_file.c_str ());
+  if (!boost::filesystem::exists (full_path))
+  {
+    boost::filesystem::path parent_dir = full_path.parent_path ();
+    std::string upper_filename = tex_mat.tex_file;
+    boost::to_upper (upper_filename);
+    std::string real_name = "";
+
+    try
+    {
+      if (!boost::filesystem::exists (parent_dir))
+      {
+        PCL_WARN ("[PCLVisualizer::textureFromTexMaterial] Parent directory '%s' doesn't exist!\n",
+                   parent_dir.string ().c_str ());
+        return (-1);
+      }
+
+      if (!boost::filesystem::is_directory (parent_dir))
+      {
+        PCL_WARN ("[PCLVisualizer::textureFromTexMaterial] Parent '%s' is not a directory !\n",
+                   parent_dir.string ().c_str ());
+        return (-1);
+      }
+
+      typedef std::vector<boost::filesystem::path> paths_vector;
+      paths_vector paths;
+      std::copy (boost::filesystem::directory_iterator (parent_dir),
+                 boost::filesystem::directory_iterator (),
+                 back_inserter (paths));
+
+      for (paths_vector::const_iterator it = paths.begin (); it != paths.end (); ++it)
+      {
+        if (boost::filesystem::is_regular_file (*it))
+        {
+          std::string name = it->string ();
+          boost::to_upper (name);
+          if (name == upper_filename)
+          {
+            real_name = it->string ();
+            break;
+          }
+        }
+      }
+      // Check texture file existence
+      if (real_name == "")
+      {
+        PCL_WARN ("[PCLVisualizer::textureFromTexMaterial] Can not find texture file %s!\n",
+                   tex_mat.tex_file.c_str ());
+        return (-1);
+      }
+    }
+    catch (const boost::filesystem::filesystem_error& ex)
+    {
+
+      PCL_WARN ("[PCLVisualizer::textureFromTexMaterial] Error %s when looking for file %s\n!",
+                 ex.what (), tex_mat.tex_file.c_str ());
+      return (-1);
+    }
+
+    //Save the real path
+    full_path = real_name.c_str ();
+  }
+
+  std::string extension = full_path.extension ().string ();
+  //!!! nizar 20131206 : The list is far from being exhaustive I am afraid.
+  if ((extension == ".jpg") || (extension == ".JPG"))
+  {
+    vtkSmartPointer<vtkJPEGReader> jpeg_reader = vtkSmartPointer<vtkJPEGReader>::New ();
+    jpeg_reader->SetFileName (full_path.string ().c_str ());
+    jpeg_reader->Update ();
+    vtk_tex->SetInputConnection (jpeg_reader->GetOutputPort ());
+  }
+  else if ((extension == ".bmp") || (extension == ".BMP"))
+  {
+    vtkSmartPointer<vtkBMPReader> bmp_reader = vtkSmartPointer<vtkBMPReader>::New ();
+    bmp_reader->SetFileName (full_path.string ().c_str ());
+    bmp_reader->Update ();
+    vtk_tex->SetInputConnection (bmp_reader->GetOutputPort ());
+  }
+  else if ((extension == ".pnm") || (extension == ".PNM"))
+  {
+    vtkSmartPointer<vtkPNMReader> pnm_reader = vtkSmartPointer<vtkPNMReader>::New ();
+    pnm_reader->SetFileName (full_path.string ().c_str ());
+    pnm_reader->Update ();
+    vtk_tex->SetInputConnection (pnm_reader->GetOutputPort ());
+  }
+  else if ((extension == ".png") || (extension == ".PNG"))
+  {
+    vtkSmartPointer<vtkPNGReader> png_reader = vtkSmartPointer<vtkPNGReader>::New ();
+    png_reader->SetFileName (full_path.string ().c_str ());
+    png_reader->Update ();
+    vtk_tex->SetInputConnection (png_reader->GetOutputPort ());
+  }
+  else if ((extension == ".tiff") || (extension == ".TIFF"))
+  {
+    vtkSmartPointer<vtkTIFFReader> tiff_reader = vtkSmartPointer<vtkTIFFReader>::New ();
+    tiff_reader->SetFileName (full_path.string ().c_str ());
+    tiff_reader->Update ();
+    vtk_tex->SetInputConnection (tiff_reader->GetOutputPort ());
+  }
+  else
+  {
+    PCL_WARN ("[PCLVisualizer::textureFromTexMaterial] Unhandled image %s for material %s!\n",
+               full_path.c_str (), tex_mat.tex_name.c_str ());
+    return (-1);
+  }
+
+  return (0);
+}
+
 bool CloudViewer::addTextureMesh (
 	   const pcl::TextureMesh &mesh,
-	   const cv::Mat & image,
 	   const std::string &id,
 	   int viewport)
 {
-	// Copied from PCL 1.8, modified to ignore vertex color and accept only one material (loaded from memory instead of file)
+	// Copied from PCL 1.8, modified to ignore vertex color
 
   pcl::visualization::CloudActorMap::iterator am_it = _visualizer->getCloudActorMap()->find (id);
   if (am_it != _visualizer->getCloudActorMap()->end ())
@@ -875,11 +910,6 @@ bool CloudViewer::addTextureMesh (
   {
     PCL_ERROR("[PCLVisualizer::addTextureMesh] No textures found!\n");
     return (false);
-  }
-  else if (mesh.tex_materials.size() > 1)
-  {
-	  PCL_ERROR("[PCLVisualizer::addTextureMesh] only one material per mesh is supported!\n");
-	  return (false);
   }
   // polygons are mapped to texture materials
   if (mesh.tex_materials.size () != mesh.tex_polygons.size ())
@@ -921,7 +951,31 @@ bool CloudViewer::addTextureMesh (
   vtkSmartPointer<vtkUnsignedCharArray> colors = vtkSmartPointer<vtkUnsignedCharArray>::New ();
   bool has_color = false;
   vtkSmartPointer<vtkMatrix4x4> transformation = vtkSmartPointer<vtkMatrix4x4>::New ();
-  
+  if (0)//(pcl::getFieldIndex(mesh.cloud, "rgba") != -1) ||
+      //(pcl::getFieldIndex(mesh.cloud, "rgb") != -1))
+  {
+    pcl::PointCloud<pcl::PointXYZRGB> cloud;
+    pcl::fromPCLPointCloud2(mesh.cloud, cloud);
+    if (cloud.points.size () == 0)
+    {
+      PCL_ERROR("[PCLVisualizer::addTextureMesh] Cloud is empty!\n");
+      return (false);
+    }
+    pcl::visualization::PCLVisualizer::convertToVtkMatrix (cloud.sensor_origin_, cloud.sensor_orientation_, transformation);
+    has_color = true;
+    colors->SetNumberOfComponents (3);
+    colors->SetName ("Colors");
+    poly_points->SetNumberOfPoints (cloud.size ());
+    for (std::size_t i = 0; i < cloud.points.size (); ++i)
+    {
+      const pcl::PointXYZRGB &p = cloud.points[i];
+      poly_points->InsertPoint (i, p.x, p.y, p.z);
+      const unsigned char color[3] = {p.r, p.g, p.b};
+      colors->InsertNextTupleValue(color);
+    }
+  }
+  else
+  {
     pcl::PointCloud<pcl::PointXYZ>::Ptr cloud (new pcl::PointCloud<pcl::PointXYZ> ());
     pcl::fromPCLPointCloud2 (mesh.cloud, *cloud);
     // no points --> exit
@@ -937,6 +991,7 @@ bool CloudViewer::addTextureMesh (
       const pcl::PointXYZ &p = cloud->points[i];
       poly_points->InsertPoint (i, p.x, p.y, p.z);
     }
+  }
 
   //create polys from polyMesh.tex_polygons
   vtkSmartPointer<vtkCellArray> polys = vtkSmartPointer<vtkCellArray>::New ();
@@ -968,13 +1023,67 @@ bool CloudViewer::addTextureMesh (
   vtkTextureUnitManager* tex_manager = vtkOpenGLRenderWindow::SafeDownCast (_visualizer->getRenderWindow())->GetTextureUnitManager ();
   if (!tex_manager)
     return (false);
- 
+  // Check if hardware support multi texture
+  int texture_units = tex_manager->GetNumberOfTextureUnits ();
+  if ((mesh.tex_materials.size () > 1) && (texture_units > 1))
+  {
+    if (texture_units < (int)mesh.tex_materials.size ())
+      PCL_WARN ("[PCLVisualizer::addTextureMesh] GPU texture units %d < mesh textures %d!\n",
+                texture_units, mesh.tex_materials.size ());
+    // Load textures
+    std::size_t last_tex_id = std::min (static_cast<int> (mesh.tex_materials.size ()), texture_units);
+    int tu = vtkProperty::VTK_TEXTURE_UNIT_0;
+    std::size_t tex_id = 0;
+    while (tex_id < last_tex_id)
+    {
+      vtkSmartPointer<vtkTexture> texture = vtkSmartPointer<vtkTexture>::New ();
+      if (textureFromTexMaterial (mesh.tex_materials[tex_id], texture))
+      {
+        PCL_WARN ("[PCLVisualizer::addTextureMesh] Failed to load texture %s, skipping!\n",
+                  mesh.tex_materials[tex_id].tex_name.c_str ());
+        continue;
+      }
+      // the first texture is in REPLACE mode others are in ADD mode
+      if (tex_id == 0)
+        texture->SetBlendingMode(vtkTexture::VTK_TEXTURE_BLENDING_MODE_REPLACE);
+      else
+        texture->SetBlendingMode(vtkTexture::VTK_TEXTURE_BLENDING_MODE_ADD);
+      // add a texture coordinates array per texture
+      vtkSmartPointer<vtkFloatArray> coordinates = vtkSmartPointer<vtkFloatArray>::New ();
+      coordinates->SetNumberOfComponents (2);
+      std::stringstream ss; ss << "TCoords" << tex_id;
+      std::string this_coordinates_name = ss.str ();
+      coordinates->SetName (this_coordinates_name.c_str ());
+
+      for (std::size_t t = 0 ; t < mesh.tex_coordinates.size (); ++t)
+        if (t == tex_id)
+          for (std::size_t tc = 0; tc < mesh.tex_coordinates[t].size (); ++tc)
+            coordinates->InsertNextTuple2 ((double)mesh.tex_coordinates[t][tc][0],
+            							   (double)mesh.tex_coordinates[t][tc][1]);
+        else
+          for (std::size_t tc = 0; tc < mesh.tex_coordinates[t].size (); ++tc)
+            coordinates->InsertNextTuple2 (-1.0, -1.0);
+
+      mapper->MapDataArrayToMultiTextureAttribute(tu,
+                                                  this_coordinates_name.c_str (),
+                                                  vtkDataObject::FIELD_ASSOCIATION_POINTS);
+      polydata->GetPointData ()->AddArray (coordinates);
+      actor->GetProperty ()->SetTexture(tu, texture);
+      ++tex_id;
+      ++tu;
+    }
+  } // end of multi texturing
+  else
+  {
+    if ((mesh.tex_materials.size () > 1) && (texture_units < 2))
+      PCL_WARN ("[PCLVisualizer::addTextureMesh] Your GPU doesn't support multi texturing. "
+                "Will use first one only!\n");
+
     vtkSmartPointer<vtkTexture> texture = vtkSmartPointer<vtkTexture>::New ();
     // fill vtkTexture from pcl::TexMaterial structure
-	vtkSmartPointer<vtkImageMatSource> cvImageToVtk = vtkSmartPointer<vtkImageMatSource>::New();
-	cvImageToVtk->SetImage(image);
-	cvImageToVtk->Update();
-	texture->SetInputConnection(cvImageToVtk->GetOutputPort());
+    if (textureFromTexMaterial (mesh.tex_materials[0], texture))
+      PCL_WARN ("[PCLVisualizer::addTextureMesh] Failed to create vtkTexture from %s!\n",
+                mesh.tex_materials[0].tex_name.c_str ());
 
     // set texture coordinates
     vtkSmartPointer<vtkFloatArray> coordinates = vtkSmartPointer<vtkFloatArray>::New ();
@@ -989,6 +1098,7 @@ bool CloudViewer::addTextureMesh (
     polydata->GetPointData ()->SetTCoords(coordinates);
     // apply texture
     actor->SetTexture (texture);
+  } // end of one texture
 
   // set mapper
   actor->SetMapper (mapper);
@@ -1020,7 +1130,6 @@ bool CloudViewer::addTextureMesh (
   (*_visualizer->getCloudActorMap())[id].viewpoint_transformation_ = transformation;
 
   _visualizer->getCloudActorMap()->find(id)->second.actor->GetProperty()->SetLighting(_aSetLighting->isChecked());
-  _visualizer->getCloudActorMap()->find(id)->second.actor->GetProperty()->SetInterpolation(_aSetFlatShading->isChecked()?VTK_FLAT:VTK_PHONG);
   _visualizer->getCloudActorMap()->find(id)->second.actor->GetProperty()->SetEdgeVisibility(_aSetEdgeVisibility->isChecked());
   _visualizer->getCloudActorMap()->find(id)->second.actor->GetProperty()->SetBackfaceCulling(_aBackfaceCulling->isChecked());
   _visualizer->getCloudActorMap()->find(id)->second.actor->GetProperty()->SetFrontfaceCulling(_frontfaceCulling);
@@ -1065,7 +1174,10 @@ bool CloudViewer::addOccupancyGridMap(
 
 		// default texture materials parameters
 		pcl::TexMaterial material;
-		material.tex_file = "";
+		// hack, can we read from memory?
+		std::string tmpPath = (_workingDirectory+"/.tmp_map.png").toStdString();
+		cv::imwrite(tmpPath, map8U);
+		material.tex_file = tmpPath;
 		mesh->tex_materials.push_back(material);
 
 #if PCL_VERSION_COMPARE(>=, 1, 8, 0)
@@ -1079,8 +1191,11 @@ bool CloudViewer::addOccupancyGridMap(
 		coordinates.push_back(Eigen::Vector2f(0,0));
 		mesh->tex_coordinates.push_back(coordinates);
 
-		this->addTextureMesh(*mesh, map8U, "map");
+		this->addTextureMesh(*mesh, "map");
 		setCloudOpacity("map", opacity);
+
+		//removed tmp texture file
+		QFile::remove(tmpPath.c_str());
 	}
 	return true;
 }
@@ -1241,7 +1356,6 @@ static const int frustum_indices[] = {
 void CloudViewer::addOrUpdateFrustum(
 			const std::string & id,
 			const Transform & transform,
-			const Transform & localTransform,
 			double scale,
 			const QColor & color)
 {
@@ -1251,66 +1365,46 @@ void CloudViewer::addOrUpdateFrustum(
 		return;
 	}
 
-#if PCL_VERSION_COMPARE(<, 1, 7, 2)
-	this->removeFrustum(id);
-#endif
+	removeFrustum(id);
 
 	if(!transform.isNull())
 	{
-		if(_frustums.find(id)==_frustums.end())
+		_frustums.insert(id);
+
+		int frustumSize = sizeof(frustum_vertices)/sizeof(float);
+		UASSERT(frustumSize>0 && frustumSize % 3 == 0);
+		frustumSize/=3;
+		pcl::PointCloud<pcl::PointXYZ> frustumPoints;
+		frustumPoints.resize(frustumSize);
+		float scaleX = 0.5f * scale;
+		float scaleY = 0.4f * scale; //4x3 arbitrary ratio
+		float scaleZ = 0.3f * scale;
+		QColor c = Qt::gray;
+		if(color.isValid())
 		{
-			_frustums.insert(id, Transform());
-
-			int frustumSize = sizeof(frustum_vertices)/sizeof(float);
-			UASSERT(frustumSize>0 && frustumSize % 3 == 0);
-			frustumSize/=3;
-			pcl::PointCloud<pcl::PointXYZ> frustumPoints;
-			frustumPoints.resize(frustumSize);
-			float scaleX = 0.5f * scale;
-			float scaleY = 0.4f * scale; //4x3 arbitrary ratio
-			float scaleZ = 0.3f * scale;
-			QColor c = Qt::gray;
-			if(color.isValid())
-			{
-				c = color;
-			}
-			Transform opticalRotInv(0, -1, 0, 0, 0, 0, -1, 0, 1, 0, 0, 0);
-
-#if PCL_VERSION_COMPARE(<, 1, 7, 2)
-			Eigen::Affine3f t = (transform*localTransform*opticalRotInv).toEigen3f();
-#else
-			Eigen::Affine3f t = (localTransform*opticalRotInv).toEigen3f();
-#endif
-			for(int i=0; i<frustumSize; ++i)
-			{
-				frustumPoints[i].x = frustum_vertices[i*3]*scaleX;
-				frustumPoints[i].y = frustum_vertices[i*3+1]*scaleY;
-				frustumPoints[i].z = frustum_vertices[i*3+2]*scaleZ;
-				frustumPoints[i] = pcl::transformPoint(frustumPoints[i], t);
-			}
-
-			pcl::PolygonMesh mesh;
-			pcl::Vertices vertices;
-			vertices.vertices.resize(sizeof(frustum_indices)/sizeof(int));
-			for(unsigned int i=0; i<vertices.vertices.size(); ++i)
-			{
-				vertices.vertices[i] = frustum_indices[i];
-			}
-			pcl::toPCLPointCloud2(frustumPoints, mesh.cloud);
-			mesh.polygons.push_back(vertices);
-			_visualizer->addPolylineFromPolygonMesh(mesh, id);
-			_visualizer->setShapeRenderingProperties(pcl::visualization::PCL_VISUALIZER_COLOR, c.redF(), c.greenF(), c.blueF(), id);
+			c = color;
 		}
-#if PCL_VERSION_COMPARE(>=, 1, 7, 2)
-		if(!this->updateFrustumPose(id, transform))
+		Eigen::Affine3f t = transform.toEigen3f();
+		for(int i=0; i<frustumSize; ++i)
 		{
-			UERROR("Failed updating pose of frustum %s!?", id.c_str());
+			frustumPoints[i].x = frustum_vertices[i*3]*scaleX;
+			frustumPoints[i].y = frustum_vertices[i*3+1]*scaleY;
+			frustumPoints[i].z = frustum_vertices[i*3+2]*scaleZ;
+			frustumPoints[i] = pcl::transformPoint(frustumPoints[i], t);
 		}
-#endif
-	}
-	else
-	{
-		removeFrustum(id);
+
+		pcl::PolygonMesh mesh;
+		pcl::Vertices vertices;
+		vertices.vertices.resize(sizeof(frustum_indices)/sizeof(int));
+		for(unsigned int i=0; i<vertices.vertices.size(); ++i)
+		{
+			vertices.vertices[i] = frustum_indices[i];
+		}
+		pcl::toPCLPointCloud2(frustumPoints, mesh.cloud);
+		mesh.polygons.push_back(vertices);
+		_visualizer->addPolylineFromPolygonMesh(mesh, id);
+		_visualizer->setShapeRenderingProperties(pcl::visualization::PCL_VISUALIZER_COLOR, c.redF(), c.greenF(), c.blueF(), id);
+
 	}
 }
 
@@ -1318,42 +1412,11 @@ bool CloudViewer::updateFrustumPose(
 		const std::string & id,
 		const Transform & pose)
 {
-#if PCL_VERSION_COMPARE(>=, 1, 7, 2)
-	QMap<std::string, Transform>::iterator iter=_frustums.find(id);
-	if(iter != _frustums.end() && !pose.isNull())
+	if(_frustums.find(id) != _frustums.end() && !pose.isNull())
 	{
-		if(iter.value() == pose)
-		{
-			// same pose, just return
-			return true;
-		}
-
-		pcl::visualization::ShapeActorMap::iterator am_it = _visualizer->getShapeActorMap()->find (id);
-
-		vtkActor* actor;
-
-		if (am_it == _visualizer->getShapeActorMap()->end ())
-			return (false);
-		else
-			actor = vtkActor::SafeDownCast (am_it->second);
-
-		if (!actor)
-			return (false);
-
-		vtkSmartPointer<vtkMatrix4x4> matrix = vtkSmartPointer<vtkMatrix4x4>::New ();
-
-		pcl::visualization::PCLVisualizer::convertToVtkMatrix (pose.toEigen3f().matrix (), matrix);
-
-		actor->SetUserMatrix (matrix);
-		actor->Modified ();
-
-		iter.value() = pose;
-
-		return true;
+		UDEBUG("Updating pose %s to %s", id.c_str(), pose.prettyPrint().c_str());
+		return _visualizer->updateShapePose(id, pose.toEigen3f());
 	}
-#else
-	UERROR("updateFrustumPose() cannot be used with PCL<1.7.2. Use addOrUpdateFrustum() instead.");
-#endif
 	return false;
 }
 
@@ -1368,21 +1431,18 @@ void CloudViewer::removeFrustum(const std::string & id)
 	if(_frustums.find(id) != _frustums.end())
 	{
 		_visualizer->removeShape(id);
-		_frustums.remove(id);
+		_frustums.erase(id);
 	}
 }
 
-void CloudViewer::removeAllFrustums(bool exceptCameraReference)
+void CloudViewer::removeAllFrustums()
 {
-	QMap<std::string, Transform> frustums = _frustums;
-	for(QMap<std::string, Transform>::iterator iter = frustums.begin(); iter!=frustums.end(); ++iter)
+	std::set<std::string> frustums = _frustums;
+	for(std::set<std::string>::iterator iter = frustums.begin(); iter!=frustums.end(); ++iter)
 	{
-		if(!exceptCameraReference || !uStrContains(iter.key(), "reference_frustum"))
-		{
-			this->removeFrustum(iter.key());
-		}
+		this->removeFrustum(*iter);
 	}
-	UASSERT(exceptCameraReference || _frustums.empty());
+	UASSERT(_frustums.empty());
 }
 
 void CloudViewer::addOrUpdateGraph(
@@ -1545,12 +1605,12 @@ void CloudViewer::setFrustumShown(bool shown)
 {
 	if(!shown)
 	{
-		QMap<std::string, Transform> frustumsCopy = _frustums;
-		for(QMap<std::string, Transform>::iterator iter=frustumsCopy.begin(); iter!=frustumsCopy.end(); ++iter)
+		std::set<std::string> frustumsCopy = _frustums;
+		for(std::set<std::string>::iterator iter=frustumsCopy.begin(); iter!=frustumsCopy.end(); ++iter)
 		{
-			if(uStrContains(iter.key(), "reference_frustum"))
+			if(uStrContains(*iter, "reference_frustum"))
 			{
-				this->removeFrustum(iter.key());
+				this->removeFrustum(*iter);
 			}
 		}
 		std::set<std::string> linesCopy = _lines;
@@ -1577,9 +1637,12 @@ void CloudViewer::setFrustumColor(QColor value)
 	{
 		value = Qt::gray;
 	}
-	for(QMap<std::string, Transform>::iterator iter=_frustums.begin(); iter!=_frustums.end(); ++iter)
+	for(std::set<std::string>::iterator iter=_frustums.begin(); iter!=_frustums.end(); ++iter)
 	{
-		_visualizer->setShapeRenderingProperties(pcl::visualization::PCL_VISUALIZER_COLOR, value.redF(), value.greenF(), value.blueF(), iter.key());
+		if(uStrContains(*iter, "reference_frustum"))
+		{
+			_visualizer->setShapeRenderingProperties(pcl::visualization::PCL_VISUALIZER_COLOR, value.redF(), value.greenF(), value.blueF(), *iter);
+		}
 	}
 	this->update();
 	_frustumColor = value;
@@ -1676,17 +1739,6 @@ void CloudViewer::setLighting(bool on)
 	for(pcl::visualization::CloudActorMap::iterator iter=cloudActorMap->begin(); iter!=cloudActorMap->end(); ++iter)
 	{
 		iter->second.actor->GetProperty()->SetLighting(_aSetLighting->isChecked());
-	}
-	this->update();
-}
-
-void CloudViewer::setShading(bool on)
-{
-	_aSetFlatShading->setChecked(on);
-	pcl::visualization::CloudActorMapPtr cloudActorMap = _visualizer->getCloudActorMap();
-	for(pcl::visualization::CloudActorMap::iterator iter=cloudActorMap->begin(); iter!=cloudActorMap->end(); ++iter)
-	{
-		iter->second.actor->GetProperty()->SetInterpolation(_aSetFlatShading->isChecked()?VTK_FLAT:VTK_PHONG); // VTK_FLAT - VTK_GOURAUD - VTK_PHONG
 	}
 	this->update();
 }
@@ -1875,19 +1927,24 @@ void CloudViewer::updateCameraFrustums(const Transform & pose, const std::vector
 {
 	if(!pose.isNull())
 	{
-		if(_aShowFrustum->isChecked())
+		// commented: update pose is crashing...
+		/*if(_frustums.find("reference_frustum") != _frustums.end())
+		{
+			this->updateFrustumPose("reference_frustum", pose);
+		}
+		else */ if(_aShowFrustum->isChecked())
 		{
 			Transform baseToCamera;
+			Transform opticalRot(0, 0, 1, 0, -1, 0, 0, 0, 0, -1, 0, 0);
+
 			for(unsigned int i=0; i<models.size(); ++i)
 			{
 				baseToCamera = Transform::getIdentity();
 				if(!models[i].localTransform().isNull() && !models[i].localTransform().isIdentity())
 				{
-					baseToCamera = models[i].localTransform();
+					baseToCamera = models[i].localTransform()*opticalRot.inverse();
 				}
-				std::string id = uFormat("reference_frustum_%d", i);
-				this->removeFrustum(id);
-				this->addOrUpdateFrustum(id, pose, baseToCamera, _frustumScale, _frustumColor);
+				this->addOrUpdateFrustum(uFormat("reference_frustum_%d", i), pose * baseToCamera, _frustumScale, _frustumColor);
 				if(!baseToCamera.isIdentity())
 				{
 					this->addOrUpdateLine(uFormat("reference_frustum_line_%d", i), pose, pose * baseToCamera, _frustumColor);
@@ -2435,10 +2492,6 @@ void CloudViewer::handleAction(QAction * a)
 	{
 		this->setLighting(_aSetLighting->isChecked());
 	}
-	else if(a == _aSetFlatShading)
-		{
-			this->setShading(_aSetFlatShading->isChecked());
-		}
 	else if(a == _aSetEdgeVisibility)
 	{
 		this->setEdgeVisibility(_aSetEdgeVisibility->isChecked());

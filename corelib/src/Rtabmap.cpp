@@ -49,8 +49,6 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <pcl/search/kdtree.h>
 #include <pcl/filters/crop_box.h>
 #include <pcl/io/pcd_io.h>
-#include <pcl/common/common.h>
-#include <pcl/TextureMesh.h>
 
 #include <stdlib.h>
 #include <set>
@@ -83,7 +81,6 @@ Rtabmap::Rtabmap() :
 	_maxMemoryAllowed(Parameters::defaultRtabmapMemoryThr()), // 0=inf
 	_loopThr(Parameters::defaultRtabmapLoopThr()),
 	_loopRatio(Parameters::defaultRtabmapLoopRatio()),
-	_verifyLoopClosureHypothesis(Parameters::defaultVhEpEnabled()),
 	_maxRetrieved(Parameters::defaultRtabmapMaxRetrieved()),
 	_maxLocalRetrieved(Parameters::defaultRGBDMaxLocalRetrieved()),
 	_rawDataKept(Parameters::defaultMemImageKept()),
@@ -402,7 +399,6 @@ void Rtabmap::parseParameters(const ParametersMap & parameters)
 	Parameters::parse(parameters, Parameters::kRtabmapMemoryThr(), _maxMemoryAllowed);
 	Parameters::parse(parameters, Parameters::kRtabmapLoopThr(), _loopThr);
 	Parameters::parse(parameters, Parameters::kRtabmapLoopRatio(), _loopRatio);
-	Parameters::parse(parameters, Parameters::kVhEpEnabled(), _verifyLoopClosureHypothesis);
 	Parameters::parse(parameters, Parameters::kRtabmapMaxRetrieved(), _maxRetrieved);
 	Parameters::parse(parameters, Parameters::kRGBDMaxLocalRetrieved(), _maxLocalRetrieved);
 	Parameters::parse(parameters, Parameters::kMemImageKept(), _rawDataKept);
@@ -472,11 +468,22 @@ void Rtabmap::parseParameters(const ParametersMap & parameters)
 		_memory->parseParameters(parameters);
 	}
 
-	if(!_epipolarGeometry)
+	VhStrategy vhStrategy = kVhUndef;
+	// Verifying hypotheses strategy
+	if((iter=parameters.find(Parameters::kRtabmapVhStrategy())) != parameters.end())
+	{
+		vhStrategy = (VhStrategy)std::atoi((*iter).second.c_str());
+	}
+	if(!_epipolarGeometry && vhStrategy == kVhEpipolar)
 	{
 		_epipolarGeometry = new EpipolarGeometry(_parameters);
 	}
-	else
+	else if(_epipolarGeometry && vhStrategy == kVhNone)
+	{
+		delete _epipolarGeometry;
+		_epipolarGeometry = 0;
+	}
+	else if(_epipolarGeometry)
 	{
 		_epipolarGeometry->parseParameters(parameters);
 	}
@@ -760,8 +767,7 @@ void Rtabmap::exportPoses(const std::string & path, bool optimized, bool global,
 				int m, w;
 				std::string l;
 				double stamp = 0.0;
-				std::vector<float> v;
-				_memory->getNodeInfo(iter->first, o, m, w, l, stamp, g, v, true);
+				_memory->getNodeInfo(iter->first, o, m, w, l, stamp, g, true);
 				stamps.insert(std::make_pair(iter->first, stamp));
 			}
 		}
@@ -809,40 +815,9 @@ void Rtabmap::resetMemory()
 // MAIN LOOP
 //============================================================
 bool Rtabmap::process(
-		const cv::Mat & image,
-		int id,
-		const std::map<std::string, float> & externalStats)
-{
-	return this->process(SensorData(image, id), Transform());
-}
-bool Rtabmap::process(
-			const SensorData & data,
-			Transform odomPose,
-			float odomLinearVariance,
-			float odomAngularVariance,
-			const std::vector<float> & odomVelocity,
-			const std::map<std::string, float> & externalStats)
-{
-	if(!odomPose.isNull())
-	{
-		UASSERT(odomLinearVariance>0.0f);
-		UASSERT(odomAngularVariance>0.0f);
-	}
-	cv::Mat covariance = cv::Mat::eye(6,6,CV_64FC1);
-	covariance.at<double>(0,0) = odomLinearVariance;
-	covariance.at<double>(1,1) = odomLinearVariance;
-	covariance.at<double>(2,2) = odomLinearVariance;
-	covariance.at<double>(3,3) = odomAngularVariance;
-	covariance.at<double>(4,4) = odomAngularVariance;
-	covariance.at<double>(5,5) = odomAngularVariance;
-	return process(data, odomPose, covariance, odomVelocity, externalStats);
-}
-bool Rtabmap::process(
 		const SensorData & data,
 		Transform odomPose,
-		const cv::Mat & odomCovariance,
-		const std::vector<float> & odomVelocity,
-		const std::map<std::string, float> & externalStats)
+		const cv::Mat & covariance)
 {
 	UDEBUG("");
 
@@ -894,10 +869,6 @@ bool Rtabmap::process(
 	std::set<int> immunizedLocations;
 
 	statistics_ = Statistics(); // reset
-	for(std::map<std::string, float>::const_iterator iter=externalStats.begin(); iter!=externalStats.end(); ++iter)
-	{
-		statistics_.addStatistic(iter->first, iter->second);
-	}
 
 	//============================================================
 	// Wait for an image...
@@ -980,14 +951,14 @@ bool Rtabmap::process(
 	ULOGGER_INFO("Updating memory...");
 	if(_rgbdSlamMode)
 	{
-		if(!_memory->update(data, odomPose, odomCovariance, odomVelocity, &statistics_))
+		if(!_memory->update(data, odomPose, covariance, &statistics_))
 		{
 			return false;
 		}
 	}
 	else
 	{
-		if(!_memory->update(data, Transform(), cv::Mat(), std::vector<float>(), &statistics_))
+		if(!_memory->update(data, Transform(), cv::Mat(), &statistics_))
 		{
 			return false;
 		}
@@ -1010,8 +981,8 @@ bool Rtabmap::process(
 	std::list<int> signaturesRemoved;
 	if(_rgbdSlamMode)
 	{
-		statistics_.addStatistic(Statistics::kMemoryOdometry_variance_lin(), odomCovariance.empty()?1.0f:(float)odomCovariance.at<double>(0,0));
-		statistics_.addStatistic(Statistics::kMemoryOdometry_variance_ang(), odomCovariance.empty()?1.0f:(float)odomCovariance.at<double>(5,5));
+		statistics_.addStatistic(Statistics::kMemoryOdometry_variance_lin(), covariance.empty()?1.0f:(float)covariance.at<double>(0,0));
+		statistics_.addStatistic(Statistics::kMemoryOdometry_variance_ang(), covariance.empty()?1.0f:(float)covariance.at<double>(5,5));
 
 		//Verify if there was a rehearsal
 		int rehearsedId = (int)uValue(statistics_.data(), Statistics::kMemoryRehearsal_merged(), 0.0f);
@@ -1025,7 +996,7 @@ bool Rtabmap::process(
 			// Minimum displacement required to add to Memory
 			//============================================================
 			const std::map<int, Link> & links = signature->getLinks();
-			if(links.size() && links.begin()->second.type() == Link::kNeighbor)
+			if(links.size() == 1)
 			{
 				// don't do this if there are intermediate nodes
 				const Signature * s = _memory->getSignature(links.begin()->second.to());
@@ -1053,8 +1024,7 @@ bool Rtabmap::process(
 		// Update optimizedPoses with the newly added node
 		Transform newPose;
 		if(_neighborLinkRefining &&
-			signature->getLinks().size() &&
-			signature->getLinks().begin()->second.type() == Link::kNeighbor &&
+			signature->getLinks().size() == 1 &&
 		   _memory->isIncremental() && // ignore pose matching in localization mode
 		   rehearsedId == 0) // don't do it if rehearsal happened
 		{
@@ -1072,7 +1042,7 @@ bool Rtabmap::process(
 					{
 						// set small variance
 						UDEBUG("Set small variance. The robot is not moving.");
-						_memory->updateLink(Link(oldId, signature->id(), signature->getLinks().begin()->second.type(), guess, cv::Mat::eye(6,6,CV_64FC1)*1000));
+						_memory->updateLink(Link(oldId, signature->id(), signature->getLinks().begin()->second.type(), guess, 0.0001, 0.0001));
 					}
 				}
 				else
@@ -1090,12 +1060,12 @@ bool Rtabmap::process(
 							UINFO("Odometry refining: update neighbor link (%d->%d, variance:lin=%f, ang=%f) from %s to %s",
 									oldId,
 									signature->id(),
-									info.covariance.at<double>(0,0),
-									info.covariance.at<double>(5,5),
+									info.varianceLin,
+									info.varianceAng,
 									guess.prettyPrint().c_str(),
 									t.prettyPrint().c_str());
-							UASSERT(info.covariance.at<double>(0,0) > 0.0 && info.covariance.at<double>(5,5) > 0.0);
-							_memory->updateLink(Link(oldId, signature->id(), signature->getLinks().begin()->second.type(), t, info.covariance.inv()));
+							UASSERT(info.varianceLin > 0.0 && info.varianceAng > 0.0);
+							_memory->updateLink(Link(oldId, signature->id(), signature->getLinks().begin()->second.type(), t, info.varianceAng, info.varianceLin));
 
 							if(_optimizeFromGraphEnd)
 							{
@@ -1116,9 +1086,9 @@ bool Rtabmap::process(
 						else
 						{
 							UINFO("Odometry refining rejected: %s", info.rejectedMsg.c_str());
-							if(info.covariance.at<double>(0,0) > 0.0 && info.covariance.at<double>(5,5) > 0.0)
+							if(info.varianceLin > 0 && info.varianceAng > 0)
 							{
-								_memory->updateLink(Link(oldId, signature->id(), signature->getLinks().begin()->second.type(), guess, (info.covariance*100.0).inv()));
+								_memory->updateLink(Link(oldId, signature->id(), signature->getLinks().begin()->second.type(), guess, sqrt(info.varianceAng), sqrt(info.varianceLin)));
 							}
 						}
 						statistics_.addStatistic(Statistics::kNeighborLinkRefiningAccepted(), !t.isNull()?1.0f:0);
@@ -1159,7 +1129,7 @@ bool Rtabmap::process(
 		// Update Poses and Constraints
 		_optimizedPoses.insert(std::make_pair(signature->id(), newPose));
 		_lastLocalizationPose = newPose; // keep in cache the latest corrected pose
-		if(signature->getLinks().size() &&
+		if(signature->getLinks().size() == 1 &&
 		   signature->getLinks().begin()->second.type() == Link::kNeighbor)
 		{
 			// link should be old to new
@@ -1261,8 +1231,8 @@ bool Rtabmap::process(
 								*iter,
 								transform.prettyPrint().c_str());
 						// Add a loop constraint
-						UASSERT(info.covariance.at<double>(0,0) > 0.0 && info.covariance.at<double>(5,5) > 0.0);
-						if(_memory->addLink(Link(signature->id(), *iter, Link::kLocalTimeClosure, transform, info.covariance.inv())))
+						UASSERT(info.varianceLin > 0.0 && info.varianceAng > 0.0);
+						if(_memory->addLink(Link(signature->id(), *iter, Link::kLocalTimeClosure, transform, info.varianceAng, info.varianceLin)))
 						{
 							++proximityDetectionsInTimeFound;
 							UINFO("Local loop closure found between %d and %d with t=%s",
@@ -1290,7 +1260,7 @@ bool Rtabmap::process(
 	//============================================================
 	// Bayes filter update
 	//============================================================
-	int previousId = signature->getLinks().size() && signature->getLinks().begin()->first!=signature->id()?signature->getLinks().begin()->first:0;
+	int previousId = signature->getLinks().size() == 1?signature->getLinks().begin()->first:0;
 	// Not a bad signature, not an intermediate node, not a small displacement unless the previous signature didn't have a loop closure
 	if(!signature->isBadSignature() && signature->getWeight()>=0 && (!smallDisplacement || _memory->getLoopClosureLinks(previousId, false).size() == 0))
 	{
@@ -1374,31 +1344,18 @@ bool Rtabmap::process(
 
 			if(_highestHypothesis.first > 0)
 			{
-				float loopThr = _loopThr;
-				if((_startNewMapOnLoopClosure || !_memory->isIncremental()) &&
-					graph::filterLinks(signature->getLinks(), Link::kPosePrior).size() == 0 && // alone in the current map
-					_memory->getWorkingMem().size()>1 && // should have an old map (beside virtual signature)
-					(int)_memory->getWorkingMem().size()<=_memory->getMaxStMemSize() &&
-					_rgbdSlamMode)
-				{
-					// If the map is very small (under STM size) and we need to find
-					// a loop closure before continuing the map or localizing,
-					// use the best hypothesis directly.
-					loopThr = 0.0f;
-				}
-
 				// Loop closure Threshold
 				// When _loopThr=0, accept loop closure if the hypothesis is over
 				// the virtual (new) place hypothesis.
-				if(_highestHypothesis.second >= loopThr)
+				if(_highestHypothesis.second >= _loopThr)
 				{
 					rejectedHypothesis = true;
-					if(posterior.size() <= 2 && loopThr>0.0f)
+					if(posterior.size() <= 2)
 					{
 						// Ignore loop closure if there is only one loop closure hypothesis
 						UDEBUG("rejected hypothesis: single hypothesis");
 					}
-					else if(_verifyLoopClosureHypothesis && !_epipolarGeometry->check(signature, _memory->getSignature(_highestHypothesis.first)))
+					else if(_epipolarGeometry && !_epipolarGeometry->check(signature, _memory->getSignature(_highestHypothesis.first)))
 					{
 						UWARN("rejected hypothesis: by epipolar geometry");
 					}
@@ -1423,10 +1380,10 @@ bool Rtabmap::process(
 				else if(_highestHypothesis.second < _loopRatio*lastHighestHypothesis.second)
 				{
 					// Used for Precision-Recall computation.
-					// When analyzing logs, it's convenient to know
+					// When analysing logs, it's convenient to know
 					// if the hypothesis would be rejected if T_loop would be lower.
 					rejectedHypothesis = true;
-					UDEBUG("rejected hypothesis: under loop ratio %f < %f", _highestHypothesis.second, _loopRatio*lastHighestHypothesis.second);
+					UWARN("rejected hypothesis: under loop ratio %f < %f", _highestHypothesis.second, _loopRatio*lastHighestHypothesis.second);
 				}
 
 				//for statistic...
@@ -1812,18 +1769,16 @@ bool Rtabmap::process(
 	//=============================================================
 	std::list<std::pair<int, int> > loopClosureLinksAdded;
 	int loopClosureVisualInliers = 0; // for statistics
-	int loopClosureVisualMatches = 0;
 	if(_loopClosureHypothesis.first>0)
 	{
 		//Compute transform if metric data are present
 		Transform transform;
 		RegistrationInfo info;
-		info.covariance = cv::Mat::eye(6,6,CV_64FC1);
+		info.varianceLin = info.varianceAng = 1.0f;
 		if(_rgbdSlamMode)
 		{
 			transform = _memory->computeTransform(_loopClosureHypothesis.first, signature->id(), Transform(), &info);
 			loopClosureVisualInliers = info.inliers;
-			loopClosureVisualMatches = info.matches;
 			rejectedHypothesis = transform.isNull();
 			if(rejectedHypothesis)
 			{
@@ -1838,8 +1793,8 @@ bool Rtabmap::process(
 		if(!rejectedHypothesis)
 		{
 			// Make the new one the parent of the old one
-			UASSERT(info.covariance.at<double>(0,0) > 0.0 && info.covariance.at<double>(5,5) > 0.0);
-			rejectedHypothesis = !_memory->addLink(Link(signature->id(), _loopClosureHypothesis.first, Link::kGlobalClosure, transform, info.covariance.inv()));
+			UASSERT(info.varianceLin > 0.0 && info.varianceAng > 0.0);
+			rejectedHypothesis = !_memory->addLink(Link(signature->id(), _loopClosureHypothesis.first, Link::kGlobalClosure, transform, info.varianceAng, info.varianceLin));
 			if(!rejectedHypothesis)
 			{
 				loopClosureLinksAdded.push_back(std::make_pair(signature->id(), _loopClosureHypothesis.first));
@@ -1944,17 +1899,13 @@ bool Rtabmap::process(
 											signature->id(),
 											nearestId,
 											transform.prettyPrint().c_str());
-									UASSERT(info.covariance.at<double>(0,0) > 0.0 && info.covariance.at<double>(5,5) > 0.0);
-									_memory->addLink(Link(signature->id(), nearestId, Link::kLocalSpaceClosure, transform, info.covariance.inv()));
+									UASSERT(info.varianceLin > 0.0 && info.varianceAng > 0.0);
+									_memory->addLink(Link(signature->id(), nearestId, Link::kLocalSpaceClosure, transform, info.varianceAng, info.varianceLin));
 									loopClosureLinksAdded.push_back(std::make_pair(signature->id(), nearestId));
 
 									if(loopClosureVisualInliers == 0)
 									{
 										loopClosureVisualInliers = info.inliers;
-									}
-									if(loopClosureVisualMatches == 0)
-									{
-										loopClosureVisualMatches = info.matches;
 									}
 
 									if(_loopClosureHypothesis.first == 0)
@@ -2073,8 +2024,8 @@ bool Rtabmap::process(
 											}
 
 											// set Identify covariance for laser scan matching only
-											UASSERT(info.covariance.at<double>(0,0) > 0.0 && info.covariance.at<double>(5,5) > 0.0);
-											_memory->addLink(Link(signature->id(), nearestId, Link::kLocalSpaceClosure, transform, (info.covariance*100.0).inv(), scanMatchingIds));
+											UASSERT(info.varianceLin>0.0 && info.varianceAng>0.0);
+											_memory->addLink(Link(signature->id(), nearestId, Link::kLocalSpaceClosure, transform, sqrt(info.varianceAng), sqrt(info.varianceLin), scanMatchingIds));
 											loopClosureLinksAdded.push_back(std::make_pair(signature->id(), nearestId));
 
 											++proximityDetectionsAddedByICPOnly;
@@ -2126,7 +2077,7 @@ bool Rtabmap::process(
 
 			if(_localRadius == 0.0f || virtualLoop.getNorm() < _localRadius)
 			{
-				_memory->addLink(Link(signature->id(), _path[_pathCurrentIndex].first, Link::kVirtualClosure, virtualLoop, cv::Mat::eye(6,6,CV_64FC1)*0.01)); // set high variance
+				_memory->addLink(Link(signature->id(), _path[_pathCurrentIndex].first, Link::kVirtualClosure, virtualLoop, 100, 100)); // set high variance
 			}
 			else
 			{
@@ -2147,16 +2098,14 @@ bool Rtabmap::process(
 		(_loopClosureHypothesis.first>0 ||
 	     lastProximitySpaceClosureId>0 || // can be different map of the current one
 	     statistics_.reducedIds().size() ||
-		 signature->hasLink(signature->id()) || // prior edge
 	     proximityDetectionsInTimeFound>0 ||
-		 ((_memory->isIncremental() || graph::filterLinks(signature->getLinks(), Link::kPosePrior).size()) && // In localization mode, the new node should be linked
+		 ((_memory->isIncremental() || signature->getLinks().size()) && // In localization mode, the new node should be linked
 		          signaturesRetrieved.size())))  		// can be different map of the current one
 	{
 		UASSERT(uContains(_optimizedPoses, signature->id()));
 
 		//used in localization mode: filter virtual links
 		std::map<int, Link> localizationLinks = graph::filterLinks(signature->getLinks(), Link::kVirtualClosure);
-		localizationLinks = graph::filterLinks(localizationLinks, Link::kPosePrior);
 
 		// Note that in localization mode, we don't re-optimize the graph
 		// if:
@@ -2234,7 +2183,7 @@ bool Rtabmap::process(
 				for(std::multimap<int, Link>::iterator iter=constraints.begin(); iter!=constraints.end(); ++iter)
 				{
 					// ignore links with high variance
-					if(iter->second.transVariance() <= 1.0 && iter->second.from() != iter->second.to())
+					if(iter->second.transVariance() <= 1.0)
 					{
 						Transform t1 = uValue(poses, iter->second.from(), Transform());
 						Transform t2 = uValue(poses, iter->second.to(), Transform());
@@ -2352,7 +2301,6 @@ bool Rtabmap::process(
 			statistics_.addStatistic(Statistics::kLoopReactivate_id(), retrievalId);
 			statistics_.addStatistic(Statistics::kLoopHypothesis_ratio(), hypothesisRatio);
 			statistics_.addStatistic(Statistics::kLoopVisual_inliers(), loopClosureVisualInliers);
-			statistics_.addStatistic(Statistics::kLoopVisual_matches(), loopClosureVisualMatches);
 			statistics_.addStatistic(Statistics::kLoopLast_id(), _memory->getLastGlobalLoopClosureId());
 			statistics_.addStatistic(Statistics::kLoopOptimization_max_error(), maxLinearError);
 			statistics_.addStatistic(Statistics::kLoopOptimization_error(), optimizationError);
@@ -2432,7 +2380,7 @@ bool Rtabmap::process(
 
 	Signature lastSignatureData(signature->id());
 	Transform lastSignatureLocalizedPose;
-	if(_optimizedPoses.find(signature->id()) != _optimizedPoses.end() && graph::filterLinks(signature->getLinks(), Link::kPosePrior).size())
+	if(_optimizedPoses.find(signature->id()) != _optimizedPoses.end() && signature->getLinks().size())
 	{
 		// only if localized set it
 		lastSignatureLocalizedPose = _optimizedPoses.at(signature->id());
@@ -2461,8 +2409,8 @@ bool Rtabmap::process(
 	{
 		if(_startNewMapOnLoopClosure &&
 			_memory->isIncremental() &&              // only in mapping mode
-			graph::filterLinks(signature->getLinks(), Link::kPosePrior).size() == 0 &&     // alone in the current map
-			_memory->getWorkingMem().size()>=2)       // The working memory should not be empty (beside virtual signature)
+			signature->getLinks().size() == 0 &&     // alone in the current map
+			_memory->getWorkingMem().size()>1)       // The working memory should not be empty
 		{
 			UWARN("Ignoring location %d because a global loop closure is required before starting a new map!",
 					signature->id());
@@ -2541,7 +2489,6 @@ bool Rtabmap::process(
 			id = _memory->getLastWorkingSignature()->id();
 			UDEBUG("Refresh local map from %d", id);
 		}
-		UDEBUG("id=%d _optimizedPoses=%d", id, (int)_optimizedPoses.size());
 		if(id > 0)
 		{
 			if(_lastLocalizationNodeId != 0)
@@ -2648,8 +2595,8 @@ bool Rtabmap::process(
 			std::string label;
 			double stamp = 0;
 			Transform groundTruth;
-			std::vector<float> velocity;
-			_memory->getNodeInfo(iter->first, odomPoseLocal, mapId, weight, label, stamp, groundTruth, velocity, false);
+			std::vector<unsigned char> userData;
+			_memory->getNodeInfo(iter->first, odomPoseLocal, mapId, weight, label, stamp, groundTruth, false);
 			signatures.insert(std::make_pair(iter->first,
 					Signature(iter->first,
 							mapId,
@@ -2658,10 +2605,6 @@ bool Rtabmap::process(
 							label,
 							odomPoseLocal,
 							groundTruth)));
-			if(!velocity.empty())
-			{
-				signatures.at(iter->first).setVelocity(velocity[0], velocity[1], velocity[2], velocity[3], velocity[4], velocity[5]);
-			}
 		}
 		localGraphSize = (int)poses.size();
 		if(!lastSignatureLocalizedPose.isNull())
@@ -2761,6 +2704,11 @@ bool Rtabmap::process(
 	UDEBUG("End process");
 
 	return true;
+}
+
+bool Rtabmap::process(const cv::Mat & image, int id)
+{
+	return this->process(SensorData(image, id), Transform());
 }
 
 // SETTERS
@@ -3117,26 +3065,18 @@ std::map<int, Transform> Rtabmap::optimizeGraph(
 				}
 			}
 		}
-		int ignoredLinks = 0;
 		if(edgeConstraints.size() != linksOut.size())
 		{
 			for(std::multimap<int, Link>::iterator iter=edgeConstraints.begin(); iter!=edgeConstraints.end(); ++iter)
 			{
 				if(graph::findLink(linksOut, iter->second.from(), iter->second.to()) == linksOut.end())
 				{
-					if(iter->second.type() == Link::kPosePrior)
-					{
-						++ignoredLinks;
-					}
-					else
-					{
-						UERROR("Not found link %d->%d in linksOut", iter->second.from(), iter->second.to());
-					}
+					UERROR("Not found link %d->%d in linksOut", iter->second.from(), iter->second.to());
 				}
 			}
 		}
-		UASSERT_MSG(poses.size() == posesOut.size() && edgeConstraints.size()-ignoredLinks == linksOut.size(),
-				uFormat("nodes %d->%d, links %d->%d (ignored=%d)", poses.size(), posesOut.size(), edgeConstraints.size(), linksOut.size(), ignoredLinks).c_str());
+		UASSERT_MSG(poses.size() == posesOut.size() && edgeConstraints.size() == linksOut.size(),
+				uFormat("nodes %d->%d, links %d->%d", poses.size(), posesOut.size(), edgeConstraints.size(), linksOut.size()).c_str());
 	}
 
 	if(constraints)
@@ -3147,7 +3087,7 @@ std::map<int, Transform> Rtabmap::optimizeGraph(
 	UASSERT(_graphOptimizer!=0);
 	if(_graphOptimizer->iterations() == 0)
 	{
-		// Optimization disabled! Return not optimized poses.
+		// Optimization desactivated! Return not optimized poses.
 		optimizedPoses = poses;
 	}
 	else
@@ -3338,8 +3278,7 @@ void Rtabmap::get3DMap(
 			std::string label;
 			double stamp = 0;
 			Transform groundTruth;
-			std::vector<float> velocity;
-			_memory->getNodeInfo(*iter, odomPoseLocal, mapId, weight, label, stamp, groundTruth, velocity, true);
+			_memory->getNodeInfo(*iter, odomPoseLocal, mapId, weight, label, stamp, groundTruth, true);
 			SensorData data = _memory->getNodeData(*iter);
 			data.setId(*iter);
 			std::multimap<int, cv::KeyPoint> words;
@@ -3358,10 +3297,6 @@ void Rtabmap::get3DMap(
 			signatures.at(*iter).setWords(words);
 			signatures.at(*iter).setWords3(words3);
 			signatures.at(*iter).setWordsDescriptors(wordsDescriptors);
-			if(!velocity.empty())
-			{
-				signatures.at(*iter).setVelocity(velocity[0], velocity[1], velocity[2], velocity[3], velocity[4], velocity[5]);
-			}
 		}
 	}
 	else if(_memory && (_memory->getStMem().size() || _memory->getWorkingMem().size() > 1))
@@ -3413,8 +3348,7 @@ void Rtabmap::getGraph(
 				std::string label;
 				double stamp = 0;
 				Transform groundTruth;
-				std::vector<float> velocity;
-				_memory->getNodeInfo(iter->first, odomPoseLocal, mapId, weight, label, stamp, groundTruth, velocity, global);
+				_memory->getNodeInfo(iter->first, odomPoseLocal, mapId, weight, label, stamp, groundTruth, global);
 				signatures->insert(std::make_pair(iter->first,
 						Signature(iter->first,
 							mapId,
@@ -3437,11 +3371,6 @@ void Rtabmap::getGraph(
 				_memory->getNodeCalibration(iter->first, models, stereoModel);
 				signatures->at(iter->first).sensorData().setCameraModels(models);
 				signatures->at(iter->first).sensorData().setStereoCameraModel(stereoModel);
-
-				if(!velocity.empty())
-				{
-					signatures->at(iter->first).setVelocity(velocity[0], velocity[1], velocity[2], velocity[3], velocity[4], velocity[5]);
-				}
 			}
 		}
 	}
@@ -3455,7 +3384,7 @@ void Rtabmap::getGraph(
 	}
 }
 
-int Rtabmap::detectMoreLoopClosures(float clusterRadius, float clusterAngle, int iterations, const ProgressState * processState)
+int Rtabmap::detectMoreLoopClosures(float clusterRadius, float clusterAngle, int iterations)
 {
 	UASSERT(iterations>0);
 
@@ -3507,12 +3436,6 @@ int Rtabmap::detectMoreLoopClosures(float clusterRadius, float clusterAngle, int
 		std::set<int> addedLinks;
 		for(std::multimap<int, int>::iterator iter=clusters.begin(); iter!= clusters.end(); ++iter, ++i)
 		{
-			if(processState && processState->isCanceled())
-			{
-				return -1;
-				break;
-			}
-
 			int from = iter->first;
 			int to = iter->second;
 			if(iter->first < iter->second)
@@ -3539,140 +3462,17 @@ int Rtabmap::detectMoreLoopClosures(float clusterRadius, float clusterAngle, int
 
 					if(!t.isNull())
 					{
-						bool updateConstraints = true;
-						if(_optimizationMaxLinearError > 0.0f)
-						{
-							//optimize the graph to see if the new constraint is globally valid
-
-							int fromId = from;
-							int mapId = signatures.at(from).mapId();
-							// use first node of the map containing from
-							for(std::map<int, Signature>::iterator iter=signatures.begin(); iter!=signatures.end(); ++iter)
-							{
-								if(iter->second.mapId() == mapId)
-								{
-									fromId = iter->first;
-									break;
-								}
-							}
-							std::multimap<int, Link> linksIn = links;
-							linksIn.insert(std::make_pair(from, Link(from, to, Link::kUserClosure, t, info.covariance.inv())));
-							const Link * maxLinearLink = 0;
-							const Link * maxAngularLink = 0;
-							float maxLinearError = 0.0f;
-							float maxAngularError = 0.0f;
-							std::map<int, Transform> optimizedPoses;
-							std::multimap<int, Link> links;
-							UASSERT(poses.find(fromId) != poses.end());
-							UASSERT_MSG(poses.find(from) != poses.end(), uFormat("id=%d poses=%d links=%d", from, (int)poses.size(), (int)links.size()).c_str());
-							UASSERT_MSG(poses.find(to) != poses.end(), uFormat("id=%d poses=%d links=%d", to, (int)poses.size(), (int)links.size()).c_str());
-							_graphOptimizer->getConnectedGraph(fromId, poses, linksIn, optimizedPoses, links);
-							UASSERT(optimizedPoses.find(fromId) != optimizedPoses.end());
-							UASSERT_MSG(optimizedPoses.find(from) != optimizedPoses.end(), uFormat("id=%d poses=%d links=%d", from, (int)optimizedPoses.size(), (int)links.size()).c_str());
-							UASSERT_MSG(optimizedPoses.find(to) != optimizedPoses.end(), uFormat("id=%d poses=%d links=%d", to, (int)optimizedPoses.size(), (int)links.size()).c_str());
-							UASSERT(graph::findLink(links, from, to) != links.end());
-							optimizedPoses = _graphOptimizer->optimize(fromId, optimizedPoses, links);
-							std::string msg;
-							if(optimizedPoses.size())
-							{
-								for(std::multimap<int, Link>::iterator iter=links.begin(); iter!=links.end(); ++iter)
-								{
-									// ignore links with high variance
-									if(iter->second.transVariance() <= 1.0 && iter->second.from() != iter->second.to())
-									{
-										UASSERT(optimizedPoses.find(iter->second.from())!=optimizedPoses.end());
-										UASSERT(optimizedPoses.find(iter->second.to())!=optimizedPoses.end());
-										Transform t1 = optimizedPoses.at(iter->second.from());
-										Transform t2 = optimizedPoses.at(iter->second.to());
-										UASSERT(!t1.isNull() && !t2.isNull());
-										Transform t = t1.inverse()*t2;
-										float linearError = uMax3(
-												fabs(iter->second.transform().x() - t.x()),
-												fabs(iter->second.transform().y() - t.y()),
-												fabs(iter->second.transform().z() - t.z()));
-										Eigen::Vector3f vA = t1.toEigen3f().rotation()*Eigen::Vector3f(1,0,0);
-										Eigen::Vector3f vB = t2.toEigen3f().rotation()*Eigen::Vector3f(1,0,0);
-										float angularError = pcl::getAngle3D(Eigen::Vector4f(vA[0], vA[1], vA[2], 0), Eigen::Vector4f(vB[0], vB[1], vB[2], 0));
-										if(linearError > maxLinearError)
-										{
-											maxLinearError = linearError;
-											maxLinearLink = &iter->second;
-										}
-										if(angularError > maxAngularError)
-										{
-											maxAngularError = angularError;
-											maxAngularLink = &iter->second;
-										}
-									}
-								}
-								if(maxLinearLink)
-								{
-									UINFO("Max optimization linear error = %f m (link %d->%d)", maxLinearError, maxLinearLink->from(), maxLinearLink->to());
-								}
-								if(maxAngularLink)
-								{
-									UINFO("Max optimization angular error = %f deg (link %d->%d)", maxAngularError*180.0f/M_PI, maxAngularLink->from(), maxAngularLink->to());
-								}
-
-								if(maxLinearError > _optimizationMaxLinearError)
-								{
-									msg = uFormat("Rejecting edge %d->%d because "
-											  "graph error is too large after optimization (%f m for edge %d->%d, %f deg for edge %d->%d). "
-											  "\"%s\" is %f m.",
-											  from,
-											  to,
-											  maxLinearError,
-											  maxLinearLink->from(),
-											  maxLinearLink->to(),
-											  maxAngularError*180.0f/M_PI,
-											  maxAngularLink?maxAngularLink->from():0,
-											  maxAngularLink?maxAngularLink->to():0,
-											  Parameters::kRGBDOptimizeMaxError().c_str(),
-											  _optimizationMaxLinearError);
-								}
-							}
-							else
-							{
-								msg = uFormat("Rejecting edge %d->%d because graph optimization has failed!",
-										  from,
-										  to);
-							}
-							if(!msg.empty())
-							{
-								UWARN("%s", msg.c_str());
-								updateConstraints = false;
-							}
-						}
-
-						if(updateConstraints)
-						{
-							UINFO("Added new loop closure between %d and %d.", from, to);
-							addedLinks.insert(from);
-							addedLinks.insert(to);
-							cv::Mat inf = info.covariance.inv();
-							links.insert(std::make_pair(from, Link(from, to, Link::kUserClosure, t, inf)));
-							loopClosuresAdded.push_back(Link(from, to, Link::kUserClosure, t, inf));
-							UINFO("Detected loop closure %d->%d! (%d/%d)", from, to, i+1, (int)clusters.size());
-						}
+						UINFO("Added new loop closure between %d and %d.", from, to);
+						addedLinks.insert(from);
+						addedLinks.insert(to);
+						links.insert(std::make_pair(from, Link(from, to, Link::kUserClosure, t, info.varianceAng, info.varianceLin)));
+						loopClosuresAdded.push_back(Link(from, to, Link::kUserClosure, t, info.varianceAng, info.varianceLin));
+						UINFO("Detected loop closure %d->%d! (%d/%d)", from, to, i+1, (int)clusters.size());
 					}
 				}
 			}
 		}
-
-		if(processState)
-		{
-			std::string msg = uFormat("Iteration %d/%d: Detected %d loop closures!", n+1, iterations, (int)addedLinks.size()/2);
-			UINFO(msg.c_str());
-			if(!processState->callback(msg))
-			{
-				return -1;
-			}
-		}
-		else
-		{
-			UINFO("Iteration %d/%d: Detected %d loop closures!", n+1, iterations, (int)addedLinks.size()/2);
-		}
-
+		UINFO("Iteration %d/%d: Detected %d loop closures!", n+1, iterations, (int)addedLinks.size()/2);
 		if(addedLinks.size() == 0)
 		{
 			break;
@@ -3735,7 +3535,7 @@ int Rtabmap::refineLinks()
 
 		if(!t.isNull())
 		{
-			linksRefined.push_back(Link(from, to, iter->second.type(), t, info.covariance.inv()));
+			linksRefined.push_back(Link(from, to, iter->second.type(), t, info.varianceAng, info.varianceLin));
 			UINFO("Refined link %d->%d! (%d/%d)", from, to, ++i, (int)links.size());
 		}
 	}
@@ -3910,7 +3710,7 @@ bool Rtabmap::computePath(const Transform & targetPose)
 		for(std::map<int, Link>::const_iterator jter=s->getLinks().begin(); jter!=s->getLinks().end(); ++jter)
 		{
 			// only add links for which poses are in "nodes"
-			if(jter->second.from() != jter->second.to() && uContains(nodes, jter->second.to()))
+			if(uContains(nodes, jter->second.to()))
 			{
 				links.insert(std::make_pair(jter->second.from(), jter->second.to()));
 				//links.insert(std::make_pair(jter->second.to(), jter->second.from())); // <-> (commented: already added when iterating in nodes)
@@ -4127,7 +3927,7 @@ void Rtabmap::updateGoalIndex()
 							if(!s->hasLink(_path[i-1].first) && _memory->getSignature(_path[i-1].first) != 0)
 							{
 								Transform virtualLoop = _path[i].second.inverse() * _path[i-1].second;
-								_memory->addLink(Link(_path[i].first, _path[i-1].first, Link::kVirtualClosure, virtualLoop, cv::Mat::eye(6,6,CV_64FC1)*0.01)); // on the optimized path
+								_memory->addLink(Link(_path[i].first, _path[i-1].first, Link::kVirtualClosure, virtualLoop, 100, 100)); // on the optimized path
 								UINFO("Added Virtual link between %d and %d", _path[i-1].first, _path[i].first);
 							}
 						}

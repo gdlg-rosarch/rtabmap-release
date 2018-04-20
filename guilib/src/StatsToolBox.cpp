@@ -154,10 +154,8 @@ void StatItem::setupUi(QGridLayout * grid)
 	_button->setPopupMode(QToolButton::InstantPopup);
 	_button->setMenu(_menu);
 	_name = new QLabel(this);
-	_name->setTextInteractionFlags(Qt::TextSelectableByMouse);
 	_name->setWordWrap(true);
 	_value = new QLabel(this);
-	_value->setTextInteractionFlags(Qt::TextSelectableByMouse);
 	_unit = new QLabel(this);
 
 	if(grid)
@@ -319,10 +317,6 @@ void StatsToolBox::updateStat(const QString & statFullName, const std::vector<fl
 			grp = list.at(0);
 			name = list.at(1);
 			unit = list.at(2);
-			for(int i=3; i<list.size(); ++i)
-			{
-				unit += "/" + list.at(i);
-			}
 		}
 		else if(list.size() == 2)
 		{

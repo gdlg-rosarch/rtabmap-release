@@ -42,8 +42,7 @@ namespace rtabmap {
 
 ProgressDialog::ProgressDialog(QWidget *parent, Qt::WindowFlags flags) :
 		QDialog(parent, flags),
-		_delayedClosingTime(1),
-		_canceled(false)
+		_delayedClosingTime(1)
 {
 	_text = new QLabel(this);
 	_text->setWordWrap(true);
@@ -63,7 +62,7 @@ ProgressDialog::ProgressDialog(QWidget *parent, Qt::WindowFlags flags) :
 	_endMessage = "Finished!";
 	this->clear();
 	connect(_closeButton, SIGNAL(clicked()), this, SLOT(close()));
-	connect(_cancelButton, SIGNAL(clicked()), this, SLOT(cancel()));
+	connect(_cancelButton, SIGNAL(clicked()), this, SIGNAL(canceled()));
 
 	QVBoxLayout * layout = new QVBoxLayout(this);
 	layout->addWidget(_text);
@@ -134,28 +133,28 @@ void ProgressDialog::setMaximumSteps(int steps)
 	_progressBar->setMaximum(steps);
 }
 
-void ProgressDialog::incrementStep(int steps)
+void ProgressDialog::incrementStep()
 {
 	//incremental progress bar (if we don't know how many items will be added)
-	if(_progressBar->value() >= _progressBar->maximum()-steps)
+	if(_progressBar->value() == _progressBar->maximum()-1)
 	{
-		_progressBar->setMaximum(_progressBar->maximum()+steps+1);
+		_progressBar->setMaximum(_progressBar->maximum()+1);
 	}
-	_progressBar->setValue(_progressBar->value()+steps);
+	_progressBar->setValue(_progressBar->value()+1);
 }
 
 void ProgressDialog::clear()
 {
 	_text->clear();
+	_progressBar->reset();
 	_detailedText->clear();
-	resetProgress();
+	_closeButton->setEnabled(false);
 }
 
 void ProgressDialog::resetProgress()
 {
 	_progressBar->reset();
 	_closeButton->setEnabled(false);
-	_canceled = false;
 }
 
 void ProgressDialog::closeDialog()
@@ -170,19 +169,12 @@ void ProgressDialog::closeEvent(QCloseEvent *event)
 {
 	if(_progressBar->value() == _progressBar->maximum())
 	{
-		_canceled = false;
 		event->accept();
 	}
 	else
 	{
 		event->ignore();
 	}
-}
-
-void ProgressDialog::cancel()
-{
-	_canceled = true;
-	emit canceled();
 }
 
 }

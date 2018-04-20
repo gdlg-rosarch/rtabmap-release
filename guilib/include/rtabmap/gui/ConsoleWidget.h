@@ -61,7 +61,7 @@ private slots:
 	void updateTextEditBufferSize();
 
 protected:
-	virtual bool handleEvent(UEvent * anEvent);
+	virtual void handleEvent(UEvent * anEvent);
 
 private:
 	Ui_consoleWidget * _ui;

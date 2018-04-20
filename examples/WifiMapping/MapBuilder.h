@@ -249,7 +249,7 @@ protected slots:
 		processingStatistics_ = false;
 	}
 
-	virtual bool handleEvent(UEvent * event)
+	virtual void handleEvent(UEvent * event)
 	{
 		if(event->getClassName().compare("RtabmapEvent") == 0)
 		{
@@ -273,7 +273,6 @@ protected slots:
 				QMetaObject::invokeMethod(this, "processOdometry", Q_ARG(rtabmap::OdometryEvent, *odomEvent));
 			}
 		}
-		return false;
 	}
 
 protected:

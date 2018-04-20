@@ -51,46 +51,32 @@ CompressionThread::CompressionThread(const cv::Mat & bytes, bool isImage) :
 {}
 void CompressionThread::mainLoop()
 {
-	try
+	if(compressMode_)
 	{
-		if(compressMode_)
+		if(!uncompressedData_.empty())
 		{
-			if(!uncompressedData_.empty())
+			if(image_)
 			{
-				if(image_)
-				{
-					compressedData_ = compressImage2(uncompressedData_, format_);
-				}
-				else
-				{
-					compressedData_ = compressData2(uncompressedData_);
-				}
+				compressedData_ = compressImage2(uncompressedData_, format_);
 			}
-		}
-		else // uncompress
-		{
-			if(!compressedData_.empty())
+			else
 			{
-				if(image_)
-				{
-					uncompressedData_ = uncompressImage(compressedData_);
-				}
-				else
-				{
-					uncompressedData_ = uncompressData(compressedData_);
-				}
+				compressedData_ = compressData2(uncompressedData_);
 			}
 		}
 	}
-	catch (cv::Exception & e) {
-		UERROR("Exception while compressing/uncompressing data: %s", e.what());
-		if(compressMode_)
+	else // uncompress
+	{
+		if(!compressedData_.empty())
 		{
-			compressedData_ = cv::Mat();
-		}
-		else
-		{
-			uncompressedData_ = cv::Mat();
+			if(image_)
+			{
+				uncompressedData_ = uncompressImage(compressedData_);
+			}
+			else
+			{
+				uncompressedData_ = uncompressData(compressedData_);
+			}
 		}
 	}
 	this->kill();

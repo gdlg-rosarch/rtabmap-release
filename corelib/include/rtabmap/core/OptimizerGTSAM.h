@@ -40,17 +40,19 @@ public:
 	static bool available();
 
 public:
-	OptimizerGTSAM(const ParametersMap & parameters = ParametersMap()) :
-		Optimizer(parameters),
-		optimizer_(Parameters::defaultGTSAMOptimizer())
-	{
-		parseParameters(parameters);
-	}
+	OptimizerGTSAM(
+			int iterations         = Parameters::defaultOptimizerIterations(),
+			bool slam2d            = Parameters::defaultRegForce3DoF(),
+			bool covarianceIgnored = Parameters::defaultOptimizerVarianceIgnored(),
+			double epsilon         = Parameters::defaultOptimizerEpsilon(),
+			bool robust            = Parameters::defaultOptimizerRobust()) :
+		Optimizer(iterations, slam2d, covarianceIgnored, epsilon, robust) {}
+
+	OptimizerGTSAM(const ParametersMap & parameters) :
+		Optimizer(parameters) {}
 	virtual ~OptimizerGTSAM() {}
 
 	virtual Type type() const {return kTypeGTSAM;}
-
-	virtual void parseParameters(const ParametersMap & parameters);
 
 	virtual std::map<int, Transform> optimize(
 			int rootId,
@@ -59,9 +61,6 @@ public:
 			std::list<std::map<int, Transform> > * intermediateGraphes = 0,
 			double * finalError = 0,
 			int * iterationsDone = 0);
-
-private:
-	int optimizer_;
 };
 
 } /* namespace rtabmap */

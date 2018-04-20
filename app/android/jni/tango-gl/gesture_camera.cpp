@@ -62,83 +62,68 @@ GestureCamera::GestureCamera() :
 GestureCamera::~GestureCamera() { delete cam_parent_transform_; }
 
 void GestureCamera::OnTouchEvent(int touch_count, TouchEvent event, float x0,
-		float y0, float x1, float y1) {
+                                 float y0, float x1, float y1) {
+  if (camera_type_ == kFirstPerson) {
+    return;
+  }
 
-	if (camera_type_!=kFirstPerson && touch_count == 1) {
-		switch (event) {
-		case kTouch0Down: {
-			cam_start_angle_ = cam_cur_angle_;
+  if (touch_count == 1) {
+    switch (event) {
+      case kTouch0Down: {
+        cam_start_angle_ = cam_cur_angle_;
 
-			touch0_start_position_.x = x0;
-			touch0_start_position_.y = y0;
-			break;
-		}
-		case kTouchMove: {
-			glm::vec2 offset;
+        touch0_start_position_.x = x0;
+        touch0_start_position_.y = y0;
+        break;
+      }
+      case kTouchMove: {
+        float rotation_x = (touch0_start_position_.y - y0) * kRotationSpeed;
+        float rotation_y = (touch0_start_position_.x - x0) * kRotationSpeed;
 
-			float rotation_x = (touch0_start_position_.y - y0) * kRotationSpeed;
-			float rotation_y = (touch0_start_position_.x - x0) * kRotationSpeed;
+        cam_cur_angle_.x = cam_start_angle_.x + rotation_x;
+        cam_cur_angle_.y = cam_start_angle_.y + rotation_y;
+        StartCameraToCurrentTransform();
+        break;
+      }
+      default: { break; }
+    }
+  }
+  if (touch_count == 2) {
+    switch (event) {
+      case kTouch1Down: {
+        float abs_x = x0 - x1;
+        float abs_y = y0 - y1;
+        start_touch_dist_ = std::sqrt(abs_x * abs_x + abs_y * abs_y);
+        cam_start_dist_ = GetPosition().z;
 
-			if(camera_type_!=kTopOrtho)
-				cam_cur_angle_.x = cam_start_angle_.x + rotation_x;
-			cam_cur_angle_.y = cam_start_angle_.y + rotation_y;
+        // center touch
+        touch0_start_position_.x = (x0+x1)/2.0f;
+        touch0_start_position_.y = (y0+y1)/2.0f;
+        break;
+      }
+      case kTouchMove: {
+        float abs_x = x0 - x1;
+        float abs_y = y0 - y1;
+        float dist = start_touch_dist_ - std::sqrt(abs_x * abs_x + abs_y * abs_y);
 
-			StartCameraToCurrentTransform();
+        cam_cur_dist_ = tango_gl::util::Clamp(cam_start_dist_ + dist * kZoomSpeed,
+                                  kCamViewMinDist, kCamViewMaxDist);
 
-			break;
-		}
-		default: { break; }
-		}
-	}
-	if (touch_count == 2) {
-		switch (event) {
-		case kTouch1Down: {
-			float abs_x = x0 - x1;
-			float abs_y = y0 - y1;
-			start_touch_dist_ = std::sqrt(abs_x * abs_x + abs_y * abs_y);
-			cam_start_dist_ = GetPosition().z;
-			cam_start_fov_ = this->getFOV();
+        glm::vec2 touch_center_position((x0+x1)/2.0f, (y0+y1)/2.0f);
+        glm::vec2 offset;
+        offset.x = (touch_center_position.x - touch0_start_position_.x) * kMoveSpeed;
+        offset.y = (touch_center_position.y - touch0_start_position_.y) * kMoveSpeed;
+        touch0_start_position_ = touch_center_position;
 
-			// center touch
-			touch0_start_position_.x = (x0+x1)/2.0f;
-			touch0_start_position_.y = (y0+y1)/2.0f;
-			break;
-		}
-		case kTouchMove: {
-			float abs_x = x0 - x1;
-			float abs_y = y0 - y1;
-			float dist = start_touch_dist_ - std::sqrt(abs_x * abs_x + abs_y * abs_y);
+        StartCameraToCurrentTransform();
 
-			if(camera_type_ == kFirstPerson)
-			{
-				this->SetFieldOfView(tango_gl::util::Clamp(cam_start_fov_ + dist * kZoomSpeed*10.0f, 45, 90));
-			}
-			else
-			{
-				cam_cur_dist_ = tango_gl::util::Clamp(cam_start_dist_ + dist * kZoomSpeed,
-								kCamViewMinDist, kCamViewMaxDist);
+        anchor_offset_ += glm::rotate(cam_parent_transform_->GetRotation(), glm::vec3(-offset.x, offset.y, 0));
 
-				this->SetOrthoMode(camera_type_ == kTopOrtho);
-				if(camera_type_ == kTopOrtho)
-				{
-					this->SetOrthoScale(cam_cur_dist_);
-				}
-
-				glm::vec2 touch_center_position((x0+x1)/2.0f, (y0+y1)/2.0f);
-				glm::vec2 offset;
-				offset.x = (touch_center_position.x - touch0_start_position_.x) * kMoveSpeed;
-				offset.y = (touch_center_position.y - touch0_start_position_.y) * kMoveSpeed;
-				touch0_start_position_ = touch_center_position;
-
-				StartCameraToCurrentTransform();
-
-				anchor_offset_ += glm::rotate(cam_parent_transform_->GetRotation(), glm::vec3(-offset.x, offset.y, 0));
-			}
-			break;
-		}
-		default: { break; }
-		}
-	}
+        break;
+      }
+      default: { break; }
+    }
+  }
 }
 
 Segment GestureCamera::GetSegmentFromTouch(float normalized_x,
@@ -179,7 +164,6 @@ void GestureCamera::SetCameraType(CameraType camera_index) {
   camera_type_ = camera_index;
   switch (camera_index) {
     case kFirstPerson:
-    	SetOrthoMode(false);
       SetFieldOfView(kLowFov);
       SetPosition(glm::vec3(0.0f, 0.0f, 0.0f));
       SetRotation(glm::quat(1.0f, 0.0f, 0.0f, 0.0f));
@@ -193,22 +177,20 @@ void GestureCamera::SetCameraType(CameraType camera_index) {
       break;
     case kThirdPerson:
     case kThirdPersonFollow:
-    	SetOrthoMode(false);
-    	SetFieldOfView(kHighFov);
+      SetFieldOfView(kHighFov);
       SetPosition(glm::vec3(0.0f, 0.0f, 0.0f));
       SetRotation(glm::quat(1.0f, 0.0f, 0.0f, 0.0f));
       cam_cur_dist_ = kThirdPersonFollow?kThirdPersonFollowCameraDist:kThirdPersonCameraDist;
       anchor_offset_ = glm::vec3(0.0f,0.0f,0.0f);
-      cam_cur_angle_.x = -M_PI / 6.0f;
+      cam_cur_angle_.x = -M_PI / 4.0f;
       cam_cur_angle_.y = kThirdPersonFollow?0:M_PI / 4.0f;
       cam_cur_target_rot_ = glm::quat(1,0,0,0);
       StartCameraToCurrentTransform();
       break;
     case kTopDown:
+      SetFieldOfView(kHighFov);
       SetPosition(glm::vec3(0.0f, 0.0f, 0.0f));
       SetRotation(glm::quat(1.0f, 0.0f, 0.0f, 0.0f));
-      SetOrthoMode(false);
-      SetFieldOfView(kHighFov);
       cam_cur_dist_ = kTopDownCameraDist;
       anchor_offset_ = glm::vec3(0.0f,0.0f,0.0f);
       cam_cur_angle_.x = -M_PI / 2.0f;
@@ -216,19 +198,6 @@ void GestureCamera::SetCameraType(CameraType camera_index) {
       cam_cur_target_rot_ = glm::quat(1,0,0,0);
       StartCameraToCurrentTransform();
       break;
-    case kTopOrtho:
-	  SetPosition(glm::vec3(0.0f, 0.0f, 0.0f));
-	  SetRotation(glm::quat(1.0f, 0.0f, 0.0f, 0.0f));
-	  SetOrthoMode(true);
-	  SetOrthoScale(kTopDownCameraDist);
-	  SetOrthoCropFactor(-1.0f);
-	  cam_cur_dist_ = kTopDownCameraDist;
-	  anchor_offset_ = glm::vec3(0.0f,0.0f,0.0f);
-	  cam_cur_angle_.x = -M_PI / 2.0f;
-	  cam_cur_angle_.y = 0.0f;
-	  cam_cur_target_rot_ = glm::quat(1,0,0,0);
-	  StartCameraToCurrentTransform();
-	  break;
     default:
       break;
   }

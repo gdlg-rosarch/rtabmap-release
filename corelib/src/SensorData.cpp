@@ -428,7 +428,7 @@ SensorData::SensorData(
 
 void SensorData::setUserDataRaw(const cv::Mat & userDataRaw)
 {
-	if(!userDataRaw.empty() && !_userDataRaw.empty())
+	if(!userDataRaw.empty() && (!_userDataCompressed.empty() || !_userDataRaw.empty()))
 	{
 		UWARN("Cannot write new user data (%d bytes) over existing user "
 			  "data (%d bytes, %d compressed). Set user data of %d to null "
@@ -697,14 +697,7 @@ void SensorData::uncompressDataConst(
 			*imageRaw = ctImage.getUncompressedData();
 			if(imageRaw->empty())
 			{
-				if(_imageCompressed.empty())
-				{
-					UWARN("Requested raw image data, but the sensor data (%d) doesn't have image.", this->id());
-				}
-				else
-				{
-					UERROR("Requested image data, but failed to uncompress (%d).", this->id());
-				}
+				UWARN("Requested raw image data, but the sensor data (%d) doesn't have image.", this->id());
 			}
 		}
 		if(depthRaw && depthRaw->empty())
@@ -712,14 +705,7 @@ void SensorData::uncompressDataConst(
 			*depthRaw = ctDepth.getUncompressedData();
 			if(depthRaw->empty())
 			{
-				if(_depthOrRightCompressed.empty())
-				{
-					UWARN("Requested depth/right image data, but the sensor data (%d) doesn't have depth/right image.", this->id());
-				}
-				else
-				{
-					UERROR("Requested depth/right image data, but failed to uncompress (%d).", this->id());
-				}
+				UWARN("Requested depth/right image data, but the sensor data (%d) doesn't have depth/right image.", this->id());
 			}
 		}
 		if(laserScanRaw && laserScanRaw->empty())
@@ -728,14 +714,7 @@ void SensorData::uncompressDataConst(
 
 			if(laserScanRaw->empty())
 			{
-				if(_laserScanCompressed.empty())
-				{
-					UWARN("Requested laser scan data, but the sensor data (%d) doesn't have laser scan.", this->id());
-				}
-				else
-				{
-					UERROR("Requested laser scan data, but failed to uncompress (%d).", this->id());
-				}
+				UWARN("Requested laser scan data, but the sensor data (%d) doesn't have laser scan.", this->id());
 			}
 		}
 		if(userDataRaw && userDataRaw->empty())
@@ -744,14 +723,7 @@ void SensorData::uncompressDataConst(
 
 			if(userDataRaw->empty())
 			{
-				if(_userDataCompressed.empty())
-				{
-					UWARN("Requested user data, but the sensor data (%d) doesn't have user data.", this->id());
-				}
-				else
-				{
-					UERROR("Requested user data, but failed to uncompress (%d).", this->id());
-				}
+				UWARN("Requested user data, but the sensor data (%d) doesn't have user data.", this->id());
 			}
 		}
 		if(groundCellsRaw && groundCellsRaw->empty())

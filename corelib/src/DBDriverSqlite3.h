@@ -53,17 +53,11 @@ private:
 	virtual bool isConnectedQuery() const;
 	virtual long getMemoryUsedQuery() const; // In bytes
 	virtual bool getDatabaseVersionQuery(std::string & version) const;
-	virtual long getNodesMemoryUsedQuery() const;
-	virtual long getLinksMemoryUsedQuery() const;
 	virtual long getImagesMemoryUsedQuery() const;
 	virtual long getDepthImagesMemoryUsedQuery() const;
-	virtual long getCalibrationsMemoryUsedQuery() const;
-	virtual long getGridsMemoryUsedQuery() const;
 	virtual long getLaserScansMemoryUsedQuery() const;
 	virtual long getUserDataMemoryUsedQuery() const;
 	virtual long getWordsMemoryUsedQuery() const;
-	virtual long getFeaturesMemoryUsedQuery() const;
-	virtual long getStatisticsMemoryUsedQuery() const;
 	virtual int getLastNodesSizeQuery() const;
 	virtual int getLastDictionarySizeQuery() const;
 	virtual int getTotalNodesSizeQuery() const;
@@ -90,32 +84,7 @@ private:
 			float cellSize,
 			const cv::Point3f & viewpoint) const;
 
-	virtual void updateDepthImageQuery(
-			int nodeId,
-			const cv::Mat & image) const;
-
 	virtual void addStatisticsQuery(const Statistics & statistics) const;
-	virtual void savePreviewImageQuery(const cv::Mat & image) const;
-	virtual cv::Mat loadPreviewImageQuery() const;
-	virtual void saveOptimizedMeshQuery(
-			const cv::Mat & cloud,
-			const std::map<int, Transform> & poses,
-			const std::vector<std::vector<std::vector<unsigned int> > > & polygons,
-#if PCL_VERSION_COMPARE(>=, 1, 8, 0)
-			const std::vector<std::vector<Eigen::Vector2f, Eigen::aligned_allocator<Eigen::Vector2f> > > & texCoords,
-#else
-			const std::vector<std::vector<Eigen::Vector2f> > & texCoords,
-#endif
-			const cv::Mat & textures) const;
-	virtual cv::Mat loadOptimizedMeshQuery(
-			std::map<int, Transform> * poses,
-			std::vector<std::vector<std::vector<unsigned int> > > * polygons,
-#if PCL_VERSION_COMPARE(>=, 1, 8, 0)
-			std::vector<std::vector<Eigen::Vector2f, Eigen::aligned_allocator<Eigen::Vector2f> > > * texCoords,
-#else
-			std::vector<std::vector<Eigen::Vector2f> > * texCoords,
-#endif
-			cv::Mat * textures) const;
 
 	// Load objects
 	virtual void loadQuery(VWDictionary * dictionary) const;
@@ -126,8 +95,7 @@ private:
 
 	virtual void loadNodeDataQuery(std::list<Signature *> & signatures, bool images=true, bool scan=true, bool userData=true, bool occupancyGrid=true) const;
 	virtual bool getCalibrationQuery(int signatureId, std::vector<CameraModel> & models, StereoCameraModel & stereoModel) const;
-	virtual bool getLaserScanInfoQuery(int signatureId, LaserScanInfo & info) const;
-	virtual bool getNodeInfoQuery(int signatureId, Transform & pose, int & mapId, int & weight, std::string & label, double & stamp, Transform & groundTruthPose, std::vector<float> & velocity) const;
+	virtual bool getNodeInfoQuery(int signatureId, Transform & pose, int & mapId, int & weight, std::string & label, double & stamp, Transform & groundTruthPose) const;
 	virtual void getAllNodeIdsQuery(std::set<int> & ids, bool ignoreChildren, bool ignoreBadSignatures) const;
 	virtual void getAllLinksQuery(std::multimap<int, Link> & links, bool ignoreNullLinks) const;
 	virtual void getLastIdQuery(const std::string & tableName, int & id) const;
@@ -139,7 +107,6 @@ private:
 	std::string queryStepNode() const;
 	std::string queryStepImage() const;
 	std::string queryStepDepth() const;
-	std::string queryStepDepthUpdate() const;
 	std::string queryStepSensorData() const;
 	std::string queryStepLinkUpdate() const;
 	std::string queryStepLink() const;
@@ -152,12 +119,11 @@ private:
 			int id,
 			const cv::Mat & imageBytes) const;
 	void stepDepth(sqlite3_stmt * ppStmt, const SensorData & sensorData) const;
-	void stepDepthUpdate(sqlite3_stmt * ppStmt, int nodeId, const cv::Mat & imageCompressed) const;
 	void stepSensorData(sqlite3_stmt * ppStmt, const SensorData & sensorData) const;
 	void stepLink(sqlite3_stmt * ppStmt, const Link & link) const;
 	void stepWordsChanged(sqlite3_stmt * ppStmt, int signatureId, int oldWordId, int newWordId) const;
 	void stepKeypoint(sqlite3_stmt * ppStmt, int signatureId, int wordId, const cv::KeyPoint & kp, const cv::Point3f & pt, const cv::Mat & descriptor) const;
-	void stepOccupancyGridUpdate(sqlite3_stmt * ppStmt,
+	void stepOccupancyGrid(sqlite3_stmt * ppStmt,
 			int nodeId,
 			const cv::Mat & ground,
 			const cv::Mat & obstacles,

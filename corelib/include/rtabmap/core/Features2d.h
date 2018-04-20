@@ -104,8 +104,7 @@ public:
 		kFeatureGfttFreak=5,
 		kFeatureGfttBrief=6,
 		kFeatureBrisk=7,
-		kFeatureGfttOrb=8,  //new 0.10.11
-		kFeatureKaze=9};    //new 0.13.2
+		kFeatureGfttOrb=8}; //new 0.10.11
 
 	static Feature2D * create(const ParametersMap & parameters = ParametersMap());
 	static Feature2D * create(Feature2D::Type type, const ParametersMap & parameters = ParametersMap()); // for convenience
@@ -135,7 +134,6 @@ public:
 	static void limitKeypoints(std::vector<cv::KeyPoint> & keypoints, int maxKeypoints);
 	static void limitKeypoints(std::vector<cv::KeyPoint> & keypoints, cv::Mat & descriptors, int maxKeypoints);
 	static void limitKeypoints(std::vector<cv::KeyPoint> & keypoints, std::vector<cv::Point3f> & keypoints3D, cv::Mat & descriptors, int maxKeypoints);
-	static void limitKeypoints(const std::vector<cv::KeyPoint> & keypoints, std::vector<bool> & inliers, int maxKeypoints);
 
 	static cv::Rect computeRoi(const cv::Mat & image, const std::string & roiRatios);
 	static cv::Rect computeRoi(const cv::Mat & image, const std::vector<float> & roiRatios);
@@ -431,33 +429,6 @@ private:
 	float patternScale_;
 
 	cv::Ptr<CV_BRISK> brisk_;
-};
-
-//KAZE
-class RTABMAP_EXP KAZE : public Feature2D
-{
-public:
-	KAZE(const ParametersMap & parameters = ParametersMap());
-	virtual ~KAZE();
-
-	virtual void parseParameters(const ParametersMap & parameters);
-	virtual Feature2D::Type getType() const { return kFeatureKaze; }
-
-private:
-	virtual std::vector<cv::KeyPoint> generateKeypointsImpl(const cv::Mat & image, const cv::Rect & roi, const cv::Mat & mask = cv::Mat()) const;
-	virtual cv::Mat generateDescriptorsImpl(const cv::Mat & image, std::vector<cv::KeyPoint> & keypoints) const;
-
-private:
-	bool extended_;
-	bool upright_;
-	float threshold_;
-	int nOctaves_;
-	int nOctaveLayers_;
-	int diffusivity_;
-
-#if CV_MAJOR_VERSION > 2
-	cv::Ptr<cv::KAZE> kaze_;
-#endif
 };
 
 

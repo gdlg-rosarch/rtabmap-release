@@ -425,124 +425,6 @@ bool importPoses(
 	return false;
 }
 
-// KITTI evaluation
-float lengths[] = {100,200,300,400,500,600,700,800};
-int32_t num_lengths = 8;
-
-struct errors {
-	int32_t first_frame;
-	float   r_err;
-	float   t_err;
-	float   len;
-	float   speed;
-	errors (int32_t first_frame,float r_err,float t_err,float len,float speed) :
-		first_frame(first_frame),r_err(r_err),t_err(t_err),len(len),speed(speed) {}
-};
-
-std::vector<float> trajectoryDistances (const std::vector<Transform> &poses) {
-	std::vector<float> dist;
-	dist.push_back(0);
-	for (unsigned int i=1; i<poses.size(); i++) {
-		Transform P1 = poses[i-1];
-		Transform P2 = poses[i];
-		float dx = P1.x()-P2.x();
-		float dy = P1.y()-P2.y();
-		float dz = P1.z()-P2.z();
-		dist.push_back(dist[i-1]+sqrt(dx*dx+dy*dy+dz*dz));
-	}
-	return dist;
-}
-
-int32_t lastFrameFromSegmentLength(std::vector<float> &dist,int32_t first_frame,float len) {
-	for (unsigned int i=first_frame; i<dist.size(); i++)
-		if (dist[i]>dist[first_frame]+len)
-			return i;
-	return -1;
-}
-
-inline float rotationError(const Transform &pose_error) {
-	float a = pose_error(0,0);
-	float b = pose_error(1,1);
-	float c = pose_error(2,2);
-	float d = 0.5*(a+b+c-1.0);
-	return std::acos(std::max(std::min(d,1.0f),-1.0f));
-}
-
-inline float translationError(const Transform &pose_error) {
-	float dx = pose_error.x();
-	float dy = pose_error.y();
-	float dz = pose_error.z();
-	return sqrt(dx*dx+dy*dy+dz*dz);
-}
-
-void calcKittiSequenceErrors (
-		const std::vector<Transform> &poses_gt,
-		const std::vector<Transform> &poses_result,
-		float & t_err,
-		float & r_err) {
-
-	UASSERT(poses_gt.size() == poses_result.size());
-
-	// error vector
-	std::vector<errors> err;
-
-	// parameters
-	int32_t step_size = 10; // every second
-
-	// pre-compute distances (from ground truth as reference)
-	std::vector<float> dist = trajectoryDistances(poses_gt);
-
-	// for all start positions do
-	for (unsigned int first_frame=0; first_frame<poses_gt.size(); first_frame+=step_size) {
-
-		// for all segment lengths do
-		for (int32_t i=0; i<num_lengths; i++) {
-
-			// current length
-			float len = lengths[i];
-
-			// compute last frame
-			int32_t last_frame = lastFrameFromSegmentLength(dist,first_frame,len);
-
-			// continue, if sequence not long enough
-			if (last_frame==-1)
-				continue;
-
-			// compute rotational and translational errors
-			Transform pose_delta_gt     = poses_gt[first_frame].inverse()*poses_gt[last_frame];
-			Transform pose_delta_result = poses_result[first_frame].inverse()*poses_result[last_frame];
-			Transform pose_error        = pose_delta_result.inverse()*pose_delta_gt;
-			float r_err = rotationError(pose_error);
-			float t_err = translationError(pose_error);
-
-			// compute speed
-			float num_frames = (float)(last_frame-first_frame+1);
-			float speed = len/(0.1*num_frames);
-
-			// write to file
-			err.push_back(errors(first_frame,r_err/len,t_err/len,len,speed));
-		}
-	}
-
-	t_err = 0;
-	r_err = 0;
-
-	// for all errors do => compute sum of t_err, r_err
-	for (std::vector<errors>::iterator it=err.begin(); it!=err.end(); it++)
-	{
-		t_err += it->t_err;
-		r_err += it->r_err;
-	}
-
-	// save errors
-	float num = err.size();
-	t_err /= num;
-	r_err /= num;
-	t_err *= 100.0f;    // Translation error (%)
-	r_err *= 180/CV_PI; // Rotation error (deg/m)
-}
-// KITTI evaluation end
-
 
 ////////////////////////////////////////////
 // Graph utilities
@@ -1456,64 +1338,61 @@ std::list<std::pair<int, Transform> > computePath(
 		}
 		for(std::map<int, Link>::const_iterator iter = links.begin(); iter!=links.end(); ++iter)
 		{
-			if(iter->second.from() != iter->second.to())
+			Transform nextPose = currentNode->pose()*iter->second.transform();
+			float cost = 0.0f;
+			if(linearVelocity <= 0.0f && angularVelocity <= 0.0f)
 			{
-				Transform nextPose = currentNode->pose()*iter->second.transform();
-				float cost = 0.0f;
-				if(linearVelocity <= 0.0f && angularVelocity <= 0.0f)
+				// use distance only
+				cost = iter->second.transform().getNorm();
+			}
+			else // use time
+			{
+				if(linearVelocity > 0.0f)
 				{
-					// use distance only
-					cost = iter->second.transform().getNorm();
+					cost += iter->second.transform().getNorm()/linearVelocity;
 				}
-				else // use time
+				if(angularVelocity > 0.0f)
 				{
-					if(linearVelocity > 0.0f)
-					{
-						cost += iter->second.transform().getNorm()/linearVelocity;
-					}
-					if(angularVelocity > 0.0f)
-					{
-						Eigen::Vector4f v1 = Eigen::Vector4f(nextPose.x()-currentNode->pose().x(), nextPose.y()-currentNode->pose().y(), nextPose.z()-currentNode->pose().z(), 1.0f);
-						Eigen::Vector4f v2 = nextPose.rotation().toEigen4f()*Eigen::Vector4f(1,0,0,1);
-						float angle = pcl::getAngle3D(v1, v2);
-						cost += angle / angularVelocity;
-					}
+					Eigen::Vector4f v1 = Eigen::Vector4f(nextPose.x()-currentNode->pose().x(), nextPose.y()-currentNode->pose().y(), nextPose.z()-currentNode->pose().z(), 1.0f);
+					Eigen::Vector4f v2 = nextPose.rotation().toEigen4f()*Eigen::Vector4f(1,0,0,1);
+					float angle = pcl::getAngle3D(v1, v2);
+					cost += angle / angularVelocity;
 				}
+			}
 
-				std::map<int, Node>::iterator nodeIter = nodes.find(iter->first);
-				if(nodeIter == nodes.end())
+			std::map<int, Node>::iterator nodeIter = nodes.find(iter->first);
+			if(nodeIter == nodes.end())
+			{
+				Node n(iter->second.to(), currentNode->id(), nextPose);
+
+				n.setCostSoFar(currentNode->costSoFar() + cost);
+				nodes.insert(std::make_pair(iter->second.to(), n));
+				if(updateNewCosts)
 				{
-					Node n(iter->second.to(), currentNode->id(), nextPose);
-
-					n.setCostSoFar(currentNode->costSoFar() + cost);
-					nodes.insert(std::make_pair(iter->second.to(), n));
-					if(updateNewCosts)
-					{
-						pqmap.insert(std::make_pair(n.totalCost(), n.id()));
-					}
-					else
-					{
-						pq.push(Pair(n.id(), n.totalCost()));
-					}
+					pqmap.insert(std::make_pair(n.totalCost(), n.id()));
 				}
-				else if(updateNewCosts && nodeIter->second.isOpened())
+				else
 				{
-					float newCostSoFar = currentNode->costSoFar() + cost;
-					if(nodeIter->second.costSoFar() > newCostSoFar)
-					{
-						// update pose with new link
-						nodeIter->second.setPose(nextPose);
+					pq.push(Pair(n.id(), n.totalCost()));
+				}
+			}
+			else if(updateNewCosts && nodeIter->second.isOpened())
+			{
+				float newCostSoFar = currentNode->costSoFar() + cost;
+				if(nodeIter->second.costSoFar() > newCostSoFar)
+				{
+					// update pose with new link
+					nodeIter->second.setPose(nextPose);
 
-						// update the cost in the priority queue
-						for(std::multimap<float, int>::iterator mapIter=pqmap.begin(); mapIter!=pqmap.end(); ++mapIter)
+					// update the cost in the priority queue
+					for(std::multimap<float, int>::iterator mapIter=pqmap.begin(); mapIter!=pqmap.end(); ++mapIter)
+					{
+						if(mapIter->second == nodeIter->first)
 						{
-							if(mapIter->second == nodeIter->first)
-							{
-								pqmap.erase(mapIter);
-								nodeIter->second.setCostSoFar(newCostSoFar);
-								pqmap.insert(std::make_pair(nodeIter->second.totalCost(), nodeIter->first));
-								break;
-							}
+							pqmap.erase(mapIter);
+							nodeIter->second.setCostSoFar(newCostSoFar);
+							pqmap.insert(std::make_pair(nodeIter->second.totalCost(), nodeIter->first));
+							break;
 						}
 					}
 				}
@@ -1751,29 +1630,6 @@ float computePathLength(
 			x += fabs(path[i].second.x() - path[i+1].second.x());
 			y += fabs(path[i].second.y() - path[i+1].second.y());
 			z += fabs(path[i].second.z() - path[i+1].second.z());
-		}
-		length = sqrt(x*x + y*y + z*z);
-	}
-	return length;
-}
-
-float computePathLength(
-		const std::map<int, Transform> & path)
-{
-	float length = 0.0f;
-	if(path.size() > 1)
-	{
-		float x=0, y=0, z=0;
-		std::map<int, Transform>::const_iterator iter=path.begin();
-		Transform previousPose = iter->second;
-		++iter;
-		for(; iter!=path.end(); ++iter)
-		{
-			const Transform & currentPose = iter->second;
-			x += fabs(previousPose.x() - currentPose.x());
-			y += fabs(previousPose.y() - currentPose.y());
-			z += fabs(previousPose.z() - currentPose.z());
-			previousPose = currentPose;
 		}
 		length = sqrt(x*x + y*y + z*z);
 	}

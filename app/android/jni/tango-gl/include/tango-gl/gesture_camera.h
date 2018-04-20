@@ -29,8 +29,7 @@ class GestureCamera : public Camera {
     kFirstPerson = 0,
     kThirdPersonFollow = 1,
     kTopDown = 2,
-	kTopOrtho = 3,
-    kThirdPerson = 4
+    kThirdPerson = 3
   };
 
   enum TouchEvent {
@@ -56,11 +55,6 @@ class GestureCamera : public Camera {
                               float touch_range);
 
   void SetAnchorPosition(const glm::vec3& pos, const glm::quat & rotation);
-  void SetAnchorOffset(const glm::vec3& pos) {anchor_offset_ = pos;}
-  const glm::vec3& GetAnchorOffset() const {return anchor_offset_;}
-
-  void SetCameraDistance(float cameraDistance) {cam_cur_dist_ = cameraDistance;}
-  float GetCameraDistance() const {return cam_cur_dist_;}
 
   // Set camera type, set render camera's parent position and rotation.
   void SetCameraType(CameraType camera_index);
@@ -81,7 +75,6 @@ class GestureCamera : public Camera {
   glm::quat cam_cur_target_rot_;
 
   float cam_start_dist_;
-  float cam_start_fov_;
   float cam_cur_dist_;
   glm::vec3 anchor_offset_;
 

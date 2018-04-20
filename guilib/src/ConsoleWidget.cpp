@@ -62,7 +62,7 @@ ConsoleWidget::~ConsoleWidget()
 	delete _ui;
 }
 
-bool ConsoleWidget::handleEvent(UEvent * anEvent)
+void ConsoleWidget::handleEvent(UEvent * anEvent)
 {
 	// WARNING, don't put a log message here! otherwise it could be recursively called.
 	if(anEvent->getClassName().compare("ULogEvent") == 0)
@@ -100,7 +100,6 @@ bool ConsoleWidget::handleEvent(UEvent * anEvent)
 		}
 
 	}
-	return false;
 }
 
 void ConsoleWidget::appendMsg(const QString & msg, int level)

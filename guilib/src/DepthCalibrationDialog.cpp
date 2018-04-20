@@ -74,12 +74,6 @@ DepthCalibrationDialog::DepthCalibrationDialog(QWidget *parent) :
 	connect(_ui->doubleSpinBox_coneStdDevThresh, SIGNAL(valueChanged(double)), this, SIGNAL(configChanged()));
 	connect(_ui->checkBox_laserScan, SIGNAL(stateChanged(int)), this, SIGNAL(configChanged()));
 
-	connect(_ui->spinBox_bin_width, SIGNAL(valueChanged(int)), this, SIGNAL(configChanged()));
-	connect(_ui->spinBox_bin_height, SIGNAL(valueChanged(int)), this, SIGNAL(configChanged()));
-	connect(_ui->doubleSpinBox_bin_depth, SIGNAL(valueChanged(double)), this, SIGNAL(configChanged()));
-	connect(_ui->spinBox_smoothing, SIGNAL(valueChanged(int)), this, SIGNAL(configChanged()));
-	connect(_ui->doubleSpinBox_maxDepthModel, SIGNAL(valueChanged(double)), this, SIGNAL(configChanged()));
-
 	_ui->buttonBox->button(QDialogButtonBox::Ok)->setFocus();
 
 	_progressDialog = new ProgressDialog(this);
@@ -115,12 +109,6 @@ void DepthCalibrationDialog::saveSettings(QSettings & settings, const QString & 
 	settings.setValue("cone_stddev_thresh",_ui->doubleSpinBox_coneStdDevThresh->value());
 	settings.setValue("laser_scan",_ui->checkBox_laserScan->isChecked());
 
-	settings.setValue("bin_width",_ui->spinBox_bin_width->value());
-	settings.setValue("bin_height",_ui->spinBox_bin_height->value());
-	settings.setValue("bin_depth",_ui->doubleSpinBox_bin_depth->value());
-	settings.setValue("smoothing",_ui->spinBox_smoothing->value());
-	settings.setValue("max_model_depth",_ui->doubleSpinBox_maxDepthModel->value());
-
 	if(!group.isEmpty())
 	{
 		settings.endGroup();
@@ -142,12 +130,6 @@ void DepthCalibrationDialog::loadSettings(QSettings & settings, const QString & 
 	_ui->doubleSpinBox_coneStdDevThresh->setValue(settings.value("cone_stddev_thresh", _ui->doubleSpinBox_coneStdDevThresh->value()).toDouble());
 	_ui->checkBox_laserScan->setChecked(settings.value("laser_scan", _ui->checkBox_laserScan->isChecked()).toBool());
 
-	_ui->spinBox_bin_width->setValue(settings.value("bin_width", _ui->spinBox_bin_width->value()).toInt());
-	_ui->spinBox_bin_height->setValue(settings.value("bin_height", _ui->spinBox_bin_height->value()).toInt());
-	_ui->doubleSpinBox_bin_depth->setValue(settings.value("bin_depth", _ui->doubleSpinBox_bin_depth->value()).toDouble());
-	_ui->spinBox_smoothing->setValue(settings.value("smoothing", _ui->spinBox_smoothing->value()).toInt());
-	_ui->doubleSpinBox_maxDepthModel->setValue(settings.value("max_model_depth", _ui->doubleSpinBox_maxDepthModel->value()).toDouble());
-
 	if(!group.isEmpty())
 	{
 		settings.endGroup();
@@ -164,19 +146,6 @@ void DepthCalibrationDialog::restoreDefaults()
 	_ui->doubleSpinBox_coneStdDevThresh->setValue(0.1); // 0.03
 	_ui->checkBox_laserScan->setChecked(false);
 	_ui->checkBox_resetModel->setChecked(true);
-
-	_ui->spinBox_bin_width->setValue(8);
-	_ui->spinBox_bin_height->setValue(6);
-	if(_imageSize.width > 0 && _imageSize.height > 0)
-	{
-		size_t bin_width, bin_height;
-		clams::DiscreteDepthDistortionModel::getBinSize(_imageSize.width, _imageSize.height, bin_width, bin_height);
-		_ui->spinBox_bin_width->setValue(bin_width);
-		_ui->spinBox_bin_height->setValue(bin_height);
-	}
-	_ui->doubleSpinBox_bin_depth->setValue(2.0),
-	_ui->spinBox_smoothing->setValue(1);
-	_ui->doubleSpinBox_maxDepthModel->setValue(10.0);
 }
 
 void DepthCalibrationDialog::saveModel()
@@ -223,72 +192,12 @@ void DepthCalibrationDialog::calibrate(
 	{
 		_ui->label_trainingSamples->setNum((int)_model->getTrainingSamples());
 	}
-
-	_ui->label_width->setText("NA");
-	_ui->label_height->setText("NA");
-	_imageSize = cv::Size();
-	CameraModel model;
-	if(cachedSignatures.size())
-	{
-		const Signature & s = cachedSignatures.begin().value();
-		const SensorData & data = s.sensorData();
-		cv::Mat depth;
-		data.uncompressDataConst(0, &depth);
-		if(data.cameraModels().size() == 1 && data.cameraModels()[0].isValidForProjection() && !depth.empty())
-		{
-			// use depth image size
-			_imageSize = depth.size();
-			_ui->label_width->setNum(_imageSize.width);
-			_ui->label_height->setNum(_imageSize.height);
-
-			if(_imageSize.width % _ui->spinBox_bin_width->value() != 0 ||
-				_imageSize.height % _ui->spinBox_bin_height->value() != 0)
-			{
-				size_t bin_width, bin_height;
-				clams::DiscreteDepthDistortionModel::getBinSize(_imageSize.width, _imageSize.height, bin_width, bin_height);
-				_ui->spinBox_bin_width->setValue(bin_width);
-				_ui->spinBox_bin_height->setValue(bin_height);
-			}
-		}
-		else if(data.cameraModels().size() > 1)
-		{
-			QMessageBox::warning(this, tr("Depth Calibration"),tr("Multi-camera not supported!"));
-			return;
-		}
-		else if(data.cameraModels().size() != 1)
-		{
-			QMessageBox::warning(this, tr("Depth Calibration"), tr("Camera model not found."));
-			return;
-		}
-		else if(data.cameraModels().size() == 1 && !data.cameraModels()[0].isValidForProjection())
-		{
-			QMessageBox::warning(this, tr("Depth Calibration"), tr("Camera model %1 not valid for projection.").arg(s.id()));
-			return;
-		}
-		else
-		{
-			QMessageBox::warning(this, tr("Depth Calibration"), tr("Depth image cannot be found in the cache, make sure to update cache before doing calibration."));
-			return;
-		}
-	}
-	else
-	{
-		QMessageBox::warning(this, tr("Depth Calibration"), tr("No signatures detected! Map is empty!?"));
-		return;
-	}
-
 	if(this->exec() == QDialog::Accepted)
 	{
 		if(_model && _ui->checkBox_resetModel->isChecked())
 		{
 			delete _model;
 			_model = 0;
-		}
-
-		if(_ui->doubleSpinBox_maxDepthModel->value() < _ui->doubleSpinBox_bin_depth->value())
-		{
-			QMessageBox::warning(this, tr("Wrong parameter"), tr("Maximum model depth should be higher than bin depth, setting to bin depth x5."));
-			_ui->doubleSpinBox_maxDepthModel->setValue(_ui->doubleSpinBox_bin_depth->value() * 5.0);
 		}
 
 		_progressDialog->setMaximumSteps(poses.size()*2 + 3);
@@ -314,63 +223,65 @@ void DepthCalibrationDialog::calibrate(
 				{
 					const Signature & s = cachedSignatures.find(iter->first).value();
 					SensorData data = s.sensorData();
-
-					cv::Mat  depth, laserScan;
-					data.uncompressData(0, &depth, _ui->checkBox_laserScan->isChecked()?&laserScan:0);
-					if(data.cameraModels().size() == 1 && data.cameraModels()[0].isValidForProjection() && !depth.empty())
+					if(data.cameraModels().size() == 1 && data.cameraModels()[0].isValidForReprojection())
 					{
-						UASSERT(iter->first == data.id());
-						pcl::PointCloud<pcl::PointXYZ>::Ptr cloud;
-
-						if(_ui->checkBox_laserScan->isChecked())
+						cv::Mat image, depth, laserScan;
+						data.uncompressData(&image, &depth, _ui->checkBox_laserScan->isChecked()?&laserScan:0);
+						if(!image.empty() && !depth.empty())
 						{
-							cloud = util3d::laserScanToPointCloud(laserScan);
-							indices->resize(cloud->size());
-							for(unsigned int i=0; i<indices->size(); ++i)
+							UASSERT(iter->first == data.id());
+							pcl::PointCloud<pcl::PointXYZ>::Ptr cloud;
+
+							if(_ui->checkBox_laserScan->isChecked())
 							{
-								indices->at(i) = i;
+								cloud = util3d::laserScanToPointCloud(laserScan);
+								indices->resize(cloud->size());
+								for(unsigned int i=0; i<indices->size(); ++i)
+								{
+									indices->at(i) = i;
+								}
 							}
-						}
-						else
-						{
-							cloud = util3d::cloudFromSensorData(
-									data,
-									_ui->spinBox_decimation->value(),
-									_ui->doubleSpinBox_maxDepth->value(),
-									_ui->doubleSpinBox_minDepth->value(),
-									indices.get(),
-									parameters);
-						}
-
-						if(indices->size())
-						{
-							if(_ui->doubleSpinBox_voxelSize->value() > 0.0)
+							else
 							{
-								cloud = util3d::voxelize(cloud, indices, _ui->doubleSpinBox_voxelSize->value());
+								cloud = util3d::cloudFromSensorData(
+										data,
+										_ui->spinBox_decimation->value(),
+										_ui->doubleSpinBox_maxDepth->value(),
+										_ui->doubleSpinBox_minDepth->value(),
+										indices.get(),
+										parameters);
 							}
 
-							cloud = util3d::transformPointCloud(cloud, iter->second);
-
-							points+=cloud->size();
-
-							*map += *cloud;
-
-							sequence.insert(std::make_pair(iter->first, data));
-
-							cv::Size size = depth.size();
-							if(_model &&
-								(_model->getWidth()!=size.width ||
-								 _model->getHeight()!=size.height))
+							if(indices->size())
 							{
-								QString msg = tr("Depth images (%1x%2) in the map don't have the "
-										   "same size then in the current model (%3x%4). You may want "
-										   "to check \"Reset previous model\" before trying again.")
-										   .arg(size.width).arg(size.height)
-										   .arg(_model->getWidth()).arg(_model->getHeight());
-								QMessageBox::warning(this, tr("Depth Calibration"), msg);
-								_progressDialog->appendText(msg, Qt::darkRed);
-								_progressDialog->setAutoClose(false);
-								return;
+								if(_ui->doubleSpinBox_voxelSize->value() > 0.0)
+								{
+									cloud = util3d::voxelize(cloud, indices, _ui->doubleSpinBox_voxelSize->value());
+								}
+
+								cloud = util3d::transformPointCloud(cloud, iter->second);
+
+								points+=cloud->size();
+
+								*map += *cloud;
+
+								sequence.insert(std::make_pair(iter->first, data));
+
+								cv::Size size = data.cameraModels()[0].imageSize();
+								if(_model &&
+									(_model->getWidth()!=size.width ||
+								     _model->getHeight()!=size.height))
+								{
+									QString msg = tr("Depth images (%1x%2) in the map don't have the "
+											   "same size then in the current model (%3x%4). You may want "
+											   "to check \"Reset previous model\" before trying again.")
+											   .arg(size.width).arg(size.height)
+											   .arg(_model->getWidth()).arg(_model->getHeight());
+									QMessageBox::warning(this, tr("Depth Calibration"), msg);
+									_progressDialog->appendText(msg, Qt::darkRed);
+									_progressDialog->setAutoClose(false);
+									return;
+								}
 							}
 						}
 					}
@@ -444,10 +355,11 @@ void DepthCalibrationDialog::calibrate(
 				_progressDialog->appendText(tr("Viewing the cloud (%1 points and %2 poses)...").arg(map->size()).arg(sequence.size()));
 				_progressDialog->incrementStep();
 				viewer->addCloud("map", map);
+				Transform opticalRot(0, 0, 1, 0, -1, 0, 0, 0, 0, -1, 0, 0);
 				for(std::map<int, SensorData>::iterator iter=sequence.begin(); iter!=sequence.end(); ++iter)
 				{
-					Transform baseToCamera = iter->second.cameraModels()[0].localTransform();
-					viewer->addOrUpdateFrustum(uFormat("frustum%d",iter->first), poses.at(iter->first), baseToCamera, 0.2);
+					Transform baseToCamera = iter->second.cameraModels()[0].localTransform()*opticalRot.inverse();
+					viewer->addOrUpdateFrustum(uFormat("frustum%d",iter->first), poses.at(iter->first) * baseToCamera, 0.2);
 				}
 				_progressDialog->appendText(tr("Viewing the cloud (%1 points and %2 poses)... done.").arg(map->size()).arg(sequence.size()));
 
@@ -461,7 +373,7 @@ void DepthCalibrationDialog::calibrate(
 			QDialog * dialog = new QDialog(this->parentWidget()?this->parentWidget():this, Qt::Window);
 			dialog->setAttribute(Qt::WA_DeleteOnClose, true);
 			dialog->setWindowTitle(tr("Original/Map"));
-			dialog->setMinimumWidth(_imageSize.width);
+			dialog->setMinimumWidth(sequence.begin()->second.cameraModels()[0].imageWidth());
 			ImageView * imageView1 = new ImageView(dialog);
 			imageView1->setMinimumSize(320, 240);
 			ImageView * imageView2 = new ImageView(dialog);
@@ -477,27 +389,10 @@ void DepthCalibrationDialog::calibrate(
 			}
 
 			//clams::DiscreteDepthDistortionModel model = clams::calibrate(sequence, poses, map);
-			const cv::Size & imageSize = _imageSize;
+			const cv::Size & imageSize = sequence.begin()->second.cameraModels()[0].imageSize();
 			if(_model == 0)
 			{
-				size_t bin_width = _ui->spinBox_bin_width->value();
-				size_t bin_height = _ui->spinBox_bin_height->value();
-				if(imageSize.width % _ui->spinBox_bin_width->value() != 0 ||
-				   imageSize.height % _ui->spinBox_bin_height->value() != 0)
-				{
-					size_t bin_width, bin_height;
-					clams::DiscreteDepthDistortionModel::getBinSize(imageSize.width, imageSize.height, bin_width, bin_height);
-					_ui->spinBox_bin_width->setValue(bin_width);
-					_ui->spinBox_bin_height->setValue(bin_height);
-				}
-				_model = new clams::DiscreteDepthDistortionModel(
-						imageSize.width,
-						imageSize.height,
-						bin_width,
-						bin_height,
-						_ui->doubleSpinBox_bin_depth->value(),
-						_ui->spinBox_smoothing->value(),
-						_ui->doubleSpinBox_maxDepthModel->value());
+				_model = new clams::DiscreteDepthDistortionModel(imageSize.width, imageSize.height);
 			}
 			UASSERT(_model->getWidth() == imageSize.width && _model->getHeight() == imageSize.height);
 
@@ -514,33 +409,24 @@ void DepthCalibrationDialog::calibrate(
 				  cv::Mat depthImage;
 				  ster->second.uncompressDataConst(0, &depthImage);
 
-				  if(ster->second.cameraModels().size() == 1 && ster->second.cameraModels()[0].isValidForProjection() && !depthImage.empty())
+				  cv::Mat mapDepth;
+				  clams::FrameProjector projector(ster->second.cameraModels()[0]);
+				  mapDepth = projector.estimateMapDepth(
+						  map,
+						  iter->second.inverse(),
+						  depthImage,
+						 _ui->doubleSpinBox_coneRadius->value(),
+						 _ui->doubleSpinBox_coneStdDevThresh->value());
+
+				  if(ULogger::level() == ULogger::kDebug)
 				  {
-					  cv::Mat mapDepth;
-					  CameraModel model = ster->second.cameraModels()[0];
-					  if(model.imageWidth() != depthImage.cols)
-					  {
-						  UASSERT_MSG(model.imageHeight() % depthImage.rows == 0, uFormat("rgb=%d depth=%d", model.imageHeight(), depthImage.rows).c_str());
-						  model = model.scaled(double(depthImage.rows) / double(model.imageHeight()));
-					  }
-					  clams::FrameProjector projector(model);
-					  mapDepth = projector.estimateMapDepth(
-							  map,
-							  iter->second.inverse(),
-							  depthImage,
-							 _ui->doubleSpinBox_coneRadius->value(),
-							 _ui->doubleSpinBox_coneStdDevThresh->value());
-
-					  if(ULogger::level() == ULogger::kDebug)
-					  {
-						  imageView1->setImage(uCvMat2QImage(depthImage));
-						  imageView2->setImage(uCvMat2QImage(mapDepth));
-					  }
-
-					  counts = _model->accumulate(mapDepth, depthImage);
-					  _progressDialog->appendText(tr("Added %1 training examples from node %2 (%3/%4).").arg(counts).arg(iter->first).arg(++index).arg(sequence.size()));
+					  imageView1->setImage(uCvMat2QImage(depthImage));
+					  imageView2->setImage(uCvMat2QImage(mapDepth));
 				  }
-				 }
+
+				  counts = _model->accumulate(mapDepth, depthImage);
+				  _progressDialog->appendText(tr("Added %1 training examples from node %2 (%3/%4).").arg(counts).arg(iter->first).arg(++index).arg(sequence.size()));
+			  }
 			  _progressDialog->incrementStep();
 			  QApplication::processEvents();
 			}

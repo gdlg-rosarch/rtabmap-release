@@ -47,7 +47,6 @@ int main(int argc, char* argv[])
 
 	/* Create tasks */
 	QApplication * app = new QApplication(argc, argv);
-	app->setStyleSheet("QMessageBox { messagebox-text-interaction-flags: 5; }"); // selectable message box
 
 	ParametersMap parameters = Parameters::parseArguments(argc, argv, true);
 	MainWindow * mainWindow = new MainWindow();

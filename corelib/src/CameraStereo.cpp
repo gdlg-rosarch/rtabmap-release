@@ -49,7 +49,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #endif
 
 #ifdef RTABMAP_ZED
-#include <sl/Camera.hpp>
+#include <zed/Camera.hpp>
 #endif
 
 namespace rtabmap
@@ -785,9 +785,9 @@ CameraStereoZed::CameraStereoZed(
 {
 	UDEBUG("");
 #ifdef RTABMAP_ZED
-	UASSERT(resolution_ >= sl::RESOLUTION_HD2K && resolution_ <sl::RESOLUTION_LAST);
-	UASSERT(quality_ >= sl::DEPTH_MODE_NONE && quality_ <sl::DEPTH_MODE_LAST);
-	UASSERT(sensingMode_ >= sl::SENSING_MODE_STANDARD && sensingMode_ <sl::SENSING_MODE_LAST);
+	UASSERT(resolution_ >= sl::zed::HD2K && resolution_ <sl::zed::LAST_RESOLUTION);
+	UASSERT(quality_ >= sl::zed::NONE && quality_ <sl::zed::LAST_MODE);
+	UASSERT(sensingMode_ >= sl::zed::FILL && sensingMode_ <sl::zed::LAST_SENSING_MODE);
 	UASSERT(confidenceThr_ >= 0 && confidenceThr_ <=100);
 #endif
 }
@@ -819,9 +819,9 @@ CameraStereoZed::CameraStereoZed(
 {
 	UDEBUG("");
 #ifdef RTABMAP_ZED
-	UASSERT(resolution_ >= sl::RESOLUTION_HD2K && resolution_ <sl::RESOLUTION_LAST);
-	UASSERT(quality_ >= sl::DEPTH_MODE_NONE && quality_ <sl::DEPTH_MODE_LAST);
-	UASSERT(sensingMode_ >= sl::SENSING_MODE_STANDARD && sensingMode_ <sl::SENSING_MODE_LAST);
+	UASSERT(resolution_ >= sl::zed::HD2K && resolution_ <sl::zed::LAST_RESOLUTION);
+	UASSERT(quality_ >= sl::zed::NONE && quality_ <sl::zed::LAST_MODE);
+	UASSERT(sensingMode_ >= sl::zed::FILL && sensingMode_ <sl::zed::LAST_SENSING_MODE);
 	UASSERT(confidenceThr_ >= 0 && confidenceThr_ <=100);
 #endif
 }
@@ -847,78 +847,61 @@ bool CameraStereoZed::init(const std::string & calibrationFolder, const std::str
 	}
 	
 	lost_ = true;
-
-	sl::InitParameters param;
-	param.camera_resolution=static_cast<sl::RESOLUTION>(resolution_);
-	param.camera_fps=getImageRate();
-	param.camera_linux_id=usbDevice_;
-	param.depth_mode=(sl::DEPTH_MODE)quality_;
-	param.coordinate_units=sl::UNIT_METER;
-	param.coordinate_system=(sl::COORDINATE_SYSTEM)sl::COORDINATE_SYSTEM_IMAGE ;
-	param.sdk_verbose=false;
-	param.sdk_gpu_id=-1;
-	param.depth_minimum_distance=-1;
-	param.camera_disable_self_calib=!selfCalibration_;
-
-	sl::ERROR_CODE r = sl::ERROR_CODE::SUCCESS;
 	if(src_ == CameraVideo::kVideoFile)
 	{
 		UINFO("svo file = %s", svoFilePath_.c_str());
-		zed_ = new sl::Camera(); // Use in SVO playback mode
-		param.svo_input_filename=svoFilePath_.c_str();
-		r = zed_->open(param);
+		zed_ = new sl::zed::Camera(svoFilePath_); // Use in SVO playback mode
 	}
 	else
 	{
 		UINFO("Resolution=%d imagerate=%f device=%d", resolution_, getImageRate(), usbDevice_);
-		zed_ = new sl::Camera(); // Use in Live Mode
-		r = zed_->open(param);
+		zed_ = new sl::zed::Camera((sl::zed::ZEDResolution_mode)resolution_, getImageRate(), usbDevice_); // Use in Live Mode
 	}
 
-	if(r!=sl::ERROR_CODE::SUCCESS)
+	sl::zed::InitParams parameters(
+		(sl::zed::MODE)quality_, //MODE
+		(sl::zed::UNIT)sl::zed::METER,  //UNIT
+		(sl::zed::COORDINATE_SYSTEM)sl::zed::IMAGE,  //COORDINATE_SYSTEM
+		false,  // verbose
+		-1,     //device (GPU)
+		-1.,    //minDist
+		!selfCalibration_,  //disableSelfCalib: false = self calibrated
+		false); //vflip
+
+	UINFO("Init ZED: Mode=%d Unit=%d CoordinateSystem=%d Verbose=false device=-1 minDist=-1 self-calibration=%s vflip=false",
+			quality_, sl::zed::METER, sl::zed::IMAGE, selfCalibration_?"true":"false");
+	sl::zed::ERRCODE err = zed_->init(parameters);
+	UDEBUG("");
+
+	// Quit if an error occurred
+	if (err != sl::zed::SUCCESS)
 	{
-		UERROR("Camera initialization failed: \"%s\"", errorCode2str(r).c_str());
+		UERROR("ZED camera initialization failed: %s", sl::zed::errcode2str(err).c_str());
 		delete zed_;
 		zed_ = 0;
 		return false;
 	}
 
-
-	UINFO("Init ZED: Mode=%d Unit=%d CoordinateSystem=%d Verbose=false device=-1 minDist=-1 self-calibration=%s vflip=false",
-	      quality_, sl::UNIT_METER, sl::COORDINATE_SYSTEM_IMAGE , selfCalibration_?"true":"false");
-	UDEBUG("");
-
 	zed_->setConfidenceThreshold(confidenceThr_);
 
 	if (computeOdometry_)
 	{
-		sl::TrackingParameters tparam;
-		tparam.enable_spatial_memory=false;
-		zed_->enableTracking(tparam);
+		Eigen::Matrix4f initPose;
+		initPose.setIdentity(4, 4);
+		zed_->enableTracking(initPose, false);
 	}
 
-	sl::CameraInformation infos = zed_->getCameraInformation();
-	sl::CalibrationParameters *stereoParams = &(infos.calibration_parameters );
-	sl::Resolution res = stereoParams->left_cam.image_size;
+	sl::zed::StereoParameters * stereoParams = zed_->getParameters();
+	sl::zed::resolution res = zed_->getImageSize();
 				
 	stereoModel_ = StereoCameraModel(
-		stereoParams->left_cam.fx, 
-		stereoParams->left_cam.fy, 
-		stereoParams->left_cam.cx, 
-		stereoParams->left_cam.cy, 
-		stereoParams->T[0],//baseline
+		stereoParams->LeftCam.fx, 
+		stereoParams->LeftCam.fy, 
+		stereoParams->LeftCam.cx, 
+		stereoParams->LeftCam.cy, 
+		stereoParams->baseline,
 		this->getLocalTransform(),
 		cv::Size(res.width, res.height));
-
-	UINFO("Calibration: fx=%f, fy=%f, cx=%f, cy=%f, baseline=%f, width=%d, height=%d, transform=%s",
-			stereoParams->left_cam.fx,
-			stereoParams->left_cam.fy,
-			stereoParams->left_cam.cx,
-			stereoParams->left_cam.cy,
-			stereoParams->T[0],//baseline
-			(int)res.width,
-			(int)res.height,
-			this->getLocalTransform().prettyPrint().c_str());
 
 	return true;
 #else
@@ -941,7 +924,7 @@ std::string CameraStereoZed::getSerial() const
 #ifdef RTABMAP_ZED
 	if(zed_)
 	{
-		return uFormat("%x", zed_->getCameraInformation ().serial_number);
+		return uFormat("%x", zed_->getZEDSerial());
 	}
 #endif
 	return "";
@@ -955,55 +938,25 @@ bool CameraStereoZed::odomProvided() const
 	return false;
 #endif
 }
-#ifdef RTABMAP_ZED
-static cv::Mat slMat2cvMat(sl::Mat& input) {
-	//convert MAT_TYPE to CV_TYPE
-	int cv_type = -1;
-	switch (input.getDataType()) {
-	case sl::MAT_TYPE_32F_C1: cv_type = CV_32FC1; break;
-	case sl::MAT_TYPE_32F_C2: cv_type = CV_32FC2; break;
-	case sl::MAT_TYPE_32F_C3: cv_type = CV_32FC3; break;
-	case sl::MAT_TYPE_32F_C4: cv_type = CV_32FC4; break;
-	case sl::MAT_TYPE_8U_C1: cv_type = CV_8UC1; break;
-	case sl::MAT_TYPE_8U_C2: cv_type = CV_8UC2; break;
-	case sl::MAT_TYPE_8U_C3: cv_type = CV_8UC3; break;
-	case sl::MAT_TYPE_8U_C4: cv_type = CV_8UC4; break;
-	default: break;
-	}	
-	// cv::Mat data requires a uchar* pointer. Therefore, we get the uchar1 pointer from sl::Mat (getPtr<T>())
-	//cv::Mat and sl::Mat will share the same memory pointer
-	return cv::Mat(input.getHeight(), input.getWidth(), cv_type, input.getPtr<sl::uchar1>(sl::MEM_CPU));
-}
-
-Transform zedPoseToTransform(const sl::Pose & pose)
-{
-	return Transform(
-			pose.pose_data.m[0], pose.pose_data.m[1], pose.pose_data.m[2], pose.pose_data.m[3],
-			pose.pose_data.m[4], pose.pose_data.m[5], pose.pose_data.m[6], pose.pose_data.m[7],
-			pose.pose_data.m[8], pose.pose_data.m[9], pose.pose_data.m[10], pose.pose_data.m[11]);
-}
-#endif
 
 SensorData CameraStereoZed::captureImage(CameraInfo * info)
 {
 	SensorData data;
 #ifdef RTABMAP_ZED
-	sl::RuntimeParameters rparam((sl::SENSING_MODE)sensingMode_, quality_ > 0, quality_ > 0, sl::REFERENCE_FRAME_CAMERA);
 	if(zed_)
 	{
 		UTimer timer;
-		bool res = zed_->grab(rparam);
+		bool res = zed_->grab((sl::zed::SENSING_MODE)sensingMode_, quality_ > 0, quality_ > 0, false);
 		while (src_ == CameraVideo::kUsbDevice && res && timer.elapsed() < 2.0)
 		{
 			// maybe there is a latency with the USB, try again in 10 ms (for the next 2 seconds)
 			uSleep(10);
-			res = zed_->grab(rparam);
+			res = zed_->grab((sl::zed::SENSING_MODE)sensingMode_, quality_ > 0, quality_ > 0, false);
 		}
 		if(!res)
 		{
 			// get left image
-			sl::Mat tmp;zed_->retrieveImage(tmp,sl::VIEW_LEFT);
-			cv::Mat rgbaLeft = slMat2cvMat(tmp);
+			cv::Mat rgbaLeft = sl::zed::slMat2cvMat(zed_->retrieveImage(static_cast<sl::zed::SIDE> (sl::zed::LEFT)));
 
 			cv::Mat left;
 			cv::cvtColor(rgbaLeft, left, cv::COLOR_BGRA2BGR);
@@ -1012,17 +965,14 @@ SensorData CameraStereoZed::captureImage(CameraInfo * info)
 			{
 				// get depth image
 				cv::Mat depth;
-				sl::Mat tmp;
-				zed_->retrieveMeasure(tmp,sl::MEASURE_DEPTH);
-				slMat2cvMat(tmp).copyTo(depth);
+				slMat2cvMat(zed_->retrieveMeasure(sl::zed::MEASURE::DEPTH)).copyTo(depth);
 
 				data = SensorData(left, depth, stereoModel_.left(), this->getNextSeqID(), UTimer::now());
 			}
 			else
 			{
 				// get right image
-				sl::Mat tmp;zed_->retrieveImage(tmp,sl::VIEW_RIGHT );
-				cv::Mat rgbaRight = slMat2cvMat(tmp);
+				cv::Mat rgbaRight = sl::zed::slMat2cvMat(zed_->retrieveImage(static_cast<sl::zed::SIDE> (sl::zed::RIGHT)));
 				cv::Mat right;
 				cv::cvtColor(rgbaRight, right, cv::COLOR_BGRA2GRAY);
 			
@@ -1031,43 +981,35 @@ SensorData CameraStereoZed::captureImage(CameraInfo * info)
 
 			if (computeOdometry_ && info)
 			{
-				sl::Pose pose;
-				zed_->getPosition(pose);
-				int trackingConfidence = pose.pose_confidence;
-				// FIXME What does pose_confidence == -1 mean?
-				if (trackingConfidence>0)
+				Eigen::Matrix4f path;
+				int trackingConfidence = zed_->getTrackingConfidence();
+				if (trackingConfidence)
 				{
-					info->odomPose = zedPoseToTransform(pose);
+					zed_->getPosition(path);
+					info->odomPose = Transform::fromEigen4f(path);
 					if (!info->odomPose.isNull())
 					{
 						//transform x->forward, y->left, z->up
 						Transform opticalTransform(0, 0, 1, 0, -1, 0, 0, 0, 0, -1, 0, 0);
 						info->odomPose = opticalTransform * info->odomPose * opticalTransform.inverse();
-
-						if (lost_)
-						{
-							info->odomCovariance = cv::Mat::eye(6, 6, CV_64FC1) * 9999.0f; // don't know transform with previous pose
-							lost_ = false;
-							UDEBUG("Init %s (var=%f)", info->odomPose.prettyPrint().c_str(), 9999.0f);
-						}
-						else
-						{
-							info->odomCovariance = cv::Mat::eye(6, 6, CV_64FC1) * 1.0f / float(trackingConfidence);
-							UDEBUG("Run %s (var=%f)", info->odomPose.prettyPrint().c_str(), 1.0f / float(trackingConfidence));
-						}
+					}
+					if (lost_)
+					{
+						info->odomCovariance = cv::Mat::eye(6, 6, CV_64FC1) * 9999.0f; // don't know transform with previous pose
+						lost_ = false;
+						UDEBUG("Init %s (var=%f)", info->odomPose.prettyPrint().c_str(), 9999.0f);
 					}
 					else
 					{
-						info->odomCovariance = cv::Mat::eye(6, 6, CV_64FC1) * 9999.0f; // lost
-						lost_ = true;
-						UWARN("ZED lost! (trackingConfidence=%d)", trackingConfidence);
+						info->odomCovariance = cv::Mat::eye(6, 6, CV_64FC1) * 1.0f / float(trackingConfidence);
+						UDEBUG("Run %s (var=%f)", info->odomPose.prettyPrint().c_str(), 1.0f / float(trackingConfidence));
 					}
 				}
 				else
 				{
 					info->odomCovariance = cv::Mat::eye(6, 6, CV_64FC1) * 9999.0f; // lost
 					lost_ = true;
-					UWARN("ZED lost! (trackingConfidence=%d)", trackingConfidence);
+					UWARN("ZED lost!");
 				}
 			}
 		}

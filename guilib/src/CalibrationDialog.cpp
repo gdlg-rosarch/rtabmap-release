@@ -265,7 +265,7 @@ void CalibrationDialog::closeEvent(QCloseEvent* event)
 	}
 }
 
-bool CalibrationDialog::handleEvent(UEvent * event)
+void CalibrationDialog::handleEvent(UEvent * event)
 {
 	if(!processingData_)
 	{
@@ -282,7 +282,6 @@ bool CalibrationDialog::handleEvent(UEvent * event)
 			}
 		}
 	}
-	return false;
 }
 
 void CalibrationDialog::processImages(const cv::Mat & imageLeft, const cv::Mat & imageRight, const QString & cameraName)

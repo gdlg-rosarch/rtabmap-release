@@ -93,32 +93,10 @@ public:
 				const cv::Mat & obstacles,
 				float cellSize,
 				const cv::Point3f & viewpoint);
-	void updateDepthImage(int nodeId, const cv::Mat & image);
 
 public:
 	void addInfoAfterRun(int stMemSize, int lastSignAdded, int processMemUsed, int databaseMemUsed, int dictionarySize, const ParametersMap & parameters) const;
 	void addStatistics(const Statistics & statistics) const;
-	void savePreviewImage(const cv::Mat & image) const;
-	cv::Mat loadPreviewImage() const;
-	void saveOptimizedMesh(
-			const cv::Mat & cloud,
-			const std::map<int, Transform> & poses = std::map<int, Transform>(), // if we want to do localization afterward using optimized mesh
-			const std::vector<std::vector<std::vector<unsigned int> > > & polygons = std::vector<std::vector<std::vector<unsigned int> > >(),      // Textures -> polygons -> vertices
-#if PCL_VERSION_COMPARE(>=, 1, 8, 0)
-			const std::vector<std::vector<Eigen::Vector2f, Eigen::aligned_allocator<Eigen::Vector2f> > > & texCoords = std::vector<std::vector<Eigen::Vector2f, Eigen::aligned_allocator<Eigen::Vector2f> > >(), // Textures -> uv coords for each vertex of the polygons
-#else
-			const std::vector<std::vector<Eigen::Vector2f> > & texCoords = std::vector<std::vector<Eigen::Vector2f> >(), // Textures -> uv coords for each vertex of the polygons
-#endif
-			const cv::Mat & textures = cv::Mat()) const; // concatenated textures (assuming square textures with all same size);
-	cv::Mat loadOptimizedMesh(
-			std::map<int, Transform> * poses = 0,
-			std::vector<std::vector<std::vector<unsigned int> > > * polygons = 0,
-#if PCL_VERSION_COMPARE(>=, 1, 8, 0)
-			std::vector<std::vector<Eigen::Vector2f, Eigen::aligned_allocator<Eigen::Vector2f> > > * texCoords = 0,
-#else
-			std::vector<std::vector<Eigen::Vector2f> > * texCoords = 0,
-#endif
-			cv::Mat * textures = 0) const;
 
 public:
 	// Mutex-protected methods of abstract versions below
@@ -128,17 +106,11 @@ public:
 	bool isConnected() const;
 	long getMemoryUsed() const; // In bytes
 	std::string getDatabaseVersion() const;
-	long getNodesMemoryUsed() const;
-	long getLinksMemoryUsed() const;
 	long getImagesMemoryUsed() const;
 	long getDepthImagesMemoryUsed() const;
-	long getCalibrationsMemoryUsed() const;
-	long getGridsMemoryUsed() const;
 	long getLaserScansMemoryUsed() const;
 	long getUserDataMemoryUsed() const;
 	long getWordsMemoryUsed() const;
-	long getFeaturesMemoryUsed() const;
-	long getStatisticsMemoryUsed() const;
 	int getLastNodesSize() const; // working memory
 	int getLastDictionarySize() const; // working memory
 	int getTotalNodesSize() const;
@@ -158,8 +130,7 @@ public:
 	void loadNodeData(std::list<Signature *> & signatures, bool images = true, bool scan = true, bool userData = true, bool occupancyGrid = true) const;
 	void getNodeData(int signatureId, SensorData & data, bool images = true, bool scan = true, bool userData = true, bool occupancyGrid = true) const;
 	bool getCalibration(int signatureId, std::vector<CameraModel> & models, StereoCameraModel & stereoModel) const;
-	bool getLaserScanInfo(int signatureId, LaserScanInfo & info) const;
-	bool getNodeInfo(int signatureId, Transform & pose, int & mapId, int & weight, std::string & label, double & stamp, Transform & groundTruthPose, std::vector<float> & velocity) const;
+	bool getNodeInfo(int signatureId, Transform & pose, int & mapId, int & weight, std::string & label, double & stamp, Transform & groundTruthPose) const;
 	void loadLinks(int signatureId, std::map<int, Link> & links, Link::Type type = Link::kUndef) const;
 	void getWeight(int signatureId, int & weight) const;
 	void getAllNodeIds(std::set<int> & ids, bool ignoreChildren = false, bool ignoreBadSignatures = false) const;
@@ -179,17 +150,11 @@ private:
 	virtual bool isConnectedQuery() const = 0;
 	virtual long getMemoryUsedQuery() const = 0; // In bytes
 	virtual bool getDatabaseVersionQuery(std::string & version) const = 0;
-	virtual long getNodesMemoryUsedQuery() const = 0;
-	virtual long getLinksMemoryUsedQuery() const = 0;
 	virtual long getImagesMemoryUsedQuery() const = 0;
 	virtual long getDepthImagesMemoryUsedQuery() const = 0;
-	virtual long getCalibrationsMemoryUsedQuery() const = 0;
-	virtual long getGridsMemoryUsedQuery() const = 0;
 	virtual long getLaserScansMemoryUsedQuery() const = 0;
 	virtual long getUserDataMemoryUsedQuery() const = 0;
 	virtual long getWordsMemoryUsedQuery() const = 0;
-	virtual long getFeaturesMemoryUsedQuery() const = 0;
-	virtual long getStatisticsMemoryUsedQuery() const = 0;
 	virtual int getLastNodesSizeQuery() const = 0;
 	virtual int getLastDictionarySizeQuery() const = 0;
 	virtual int getTotalNodesSizeQuery() const = 0;
@@ -216,32 +181,7 @@ private:
 				float cellSize,
 				const cv::Point3f & viewpoint) const = 0;
 
-	virtual void updateDepthImageQuery(
-					int nodeId,
-					const cv::Mat & image) const = 0;
-
 	virtual void addStatisticsQuery(const Statistics & statistics) const = 0;
-	virtual void savePreviewImageQuery(const cv::Mat & image) const = 0;
-	virtual cv::Mat loadPreviewImageQuery() const = 0;
-	virtual void saveOptimizedMeshQuery(
-				const cv::Mat & cloud,
-				const std::map<int, Transform> & poses,
-				const std::vector<std::vector<std::vector<unsigned int> > > & polygons,
-#if PCL_VERSION_COMPARE(>=, 1, 8, 0)
-				const std::vector<std::vector<Eigen::Vector2f, Eigen::aligned_allocator<Eigen::Vector2f> > > & texCoords,
-#else
-				const std::vector<std::vector<Eigen::Vector2f> > & texCoords,
-#endif
-				const cv::Mat & textures) const = 0;
-	virtual cv::Mat loadOptimizedMeshQuery(
-				std::map<int, Transform> * poses,
-				std::vector<std::vector<std::vector<unsigned int> > > * polygons,
-#if PCL_VERSION_COMPARE(>=, 1, 8, 0)
-				std::vector<std::vector<Eigen::Vector2f, Eigen::aligned_allocator<Eigen::Vector2f> > > * texCoords,
-#else
-				std::vector<std::vector<Eigen::Vector2f> > * texCoords,
-#endif
-				cv::Mat * textures) const = 0;
 
 	// Load objects
 	virtual void loadQuery(VWDictionary * dictionary) const = 0;
@@ -252,8 +192,7 @@ private:
 
 	virtual void loadNodeDataQuery(std::list<Signature *> & signatures, bool images=true, bool scan=true, bool userData=true, bool occupancyGrid=true) const = 0;
 	virtual bool getCalibrationQuery(int signatureId, std::vector<CameraModel> & models, StereoCameraModel & stereoModel) const = 0;
-	virtual bool getLaserScanInfoQuery(int signatureId, LaserScanInfo & info) const = 0;
-	virtual bool getNodeInfoQuery(int signatureId, Transform & pose, int & mapId, int & weight, std::string & label, double & stamp, Transform & groundTruthPose, std::vector<float> & velocity) const = 0;
+	virtual bool getNodeInfoQuery(int signatureId, Transform & pose, int & mapId, int & weight, std::string & label, double & stamp, Transform & groundTruthPose) const = 0;
 	virtual void getAllNodeIdsQuery(std::set<int> & ids, bool ignoreChildren, bool ignoreBadSignatures) const = 0;
 	virtual void getAllLinksQuery(std::multimap<int, Link> & links, bool ignoreNullLinks) const = 0;
 	virtual void getLastIdQuery(const std::string & tableName, int & id) const = 0;

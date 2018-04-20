@@ -56,7 +56,7 @@ Transform estimateMotion3DTo2D(
 			int refineIterations,
 			const Transform & guess,
 			const std::map<int, cv::Point3f> & words3B,
-			cv::Mat * covariance,
+			double * varianceOut,
 			std::vector<int> * matchesOut,
 			std::vector<int> * inliersOut)
 {
@@ -65,9 +65,9 @@ Transform estimateMotion3DTo2D(
 	Transform transform;
 	std::vector<int> matches, inliers;
 
-	if(covariance)
+	if(varianceOut)
 	{
-		*covariance = cv::Mat::eye(6,6,CV_64FC1);
+		*varianceOut = 1.0;
 	}
 
 	// find correspondences
@@ -138,7 +138,7 @@ Transform estimateMotion3DTo2D(
 			transform = (cameraModel.localTransform() * pnp).inverse();
 
 			// compute variance (like in PCL computeVariance() method of sac_model.h)
-			if(covariance && words3B.size())
+			if(varianceOut && words3B.size())
 			{
 				std::vector<float> errorSqrdDists(inliers.size());
 				oi = 0;
@@ -162,10 +162,10 @@ Transform estimateMotion3DTo2D(
 				{
 					std::sort(errorSqrdDists.begin(), errorSqrdDists.end());
 					double median_error_sqr = (double)errorSqrdDists[errorSqrdDists.size () >> 1];
-					*covariance *= 2.1981 * median_error_sqr;
+					*varianceOut = 2.1981 * median_error_sqr;
 				}
 			}
-			else if(covariance)
+			else if(varianceOut)
 			{
 				// compute variance, which is the rms of reprojection errors
 				std::vector<cv::Point2f> imagePointsReproj;
@@ -175,7 +175,7 @@ Transform estimateMotion3DTo2D(
 				{
 					err += uNormSquared(imagePoints.at(inliers[i]).x - imagePointsReproj.at(inliers[i]).x, imagePoints.at(inliers[i]).y - imagePointsReproj.at(inliers[i]).y);
 				}
-				*covariance *= std::sqrt(err/float(inliers.size()));
+				*varianceOut = std::sqrt(err/float(inliers.size()));
 			}
 		}
 	}
@@ -203,7 +203,7 @@ Transform estimateMotion3DTo3D(
 			double inliersDistance,
 			int iterations,
 			int refineIterations,
-			cv::Mat * covariance,
+			double * varianceOut,
 			std::vector<int> * matchesOut,
 			std::vector<int> * inliersOut)
 {
@@ -222,14 +222,14 @@ Transform estimateMotion3DTo3D(
 	UASSERT(inliers1.size() == inliers2.size());
 	UDEBUG("Unique correspondences = %d", (int)inliers1.size());
 
-	if(covariance)
+	if(varianceOut)
 	{
-		*covariance = cv::Mat::eye(6,6,CV_64FC1);
+		*varianceOut = 1.0;
 	}
 
-	std::vector<int> inliers;
 	if((int)inliers1.size() >= minInliers)
 	{
+		std::vector<int> inliers;
 		pcl::PointCloud<pcl::PointXYZ>::Ptr inliers1cloud(new pcl::PointCloud<pcl::PointXYZ>);
 		pcl::PointCloud<pcl::PointXYZ>::Ptr inliers2cloud(new pcl::PointCloud<pcl::PointXYZ>);
 		inliers1cloud->resize(inliers1.size());
@@ -251,27 +251,27 @@ Transform estimateMotion3DTo3D(
 				refineIterations,
 				3.0,
 				&inliers,
-				covariance);
+				varianceOut);
 
 		if(!t.isNull() && (int)inliers.size() >= minInliers)
 		{
 			transform = t;
 		}
-	}
 
-	if(matchesOut)
-	{
-		*matchesOut = matches;
-	}
-	if(inliersOut)
-	{
-		inliersOut->resize(inliers.size());
-		for(unsigned int i=0; i<inliers.size(); ++i)
+		if(matchesOut)
 		{
-			inliersOut->at(i) = matches[inliers[i]];
+			*matchesOut = matches;
+		}
+
+		if(inliersOut)
+		{
+			inliersOut->resize(inliers.size());
+			for(unsigned int i=0; i<inliers.size(); ++i)
+			{
+				inliersOut->at(i) = matches[inliers[i]];
+			}
 		}
 	}
-
 	return transform;
 }
 

@@ -102,11 +102,10 @@ public:
 	void removeAllWords();
 	void removeWord(int wordId);
 	void changeWordsRef(int oldWordId, int activeWordId);
-	void setWords(const std::multimap<int, cv::KeyPoint> & words);
+	void setWords(const std::multimap<int, cv::KeyPoint> & words) {_enabled = false;_words = words;}
 	bool isEnabled() const {return _enabled;}
 	void setEnabled(bool enabled) {_enabled = enabled;}
 	const std::multimap<int, cv::KeyPoint> & getWords() const {return _words;}
-	int getInvalidWordsCount() const {return _invalidWordsCount;}
 	const std::map<int, int> & getWordsChanged() const {return _wordsChanged;}
 	const std::multimap<int, cv::Mat> & getWordsDescriptors() const {return _wordsDescriptors;}
 	void setWordsDescriptors(const std::multimap<int, cv::Mat> & descriptors) {_wordsDescriptors = descriptors;}
@@ -115,21 +114,11 @@ public:
 	void setWords3(const std::multimap<int, cv::Point3f> & words3) {_words3 = words3;}
 	void setPose(const Transform & pose) {_pose = pose;}
 	void setGroundTruthPose(const Transform & pose) {_groundTruthPose = pose;}
-	void setVelocity(float vx, float vy, float vz, float vroll, float vpitch, float vyaw) {
-		_velocity = std::vector<float>(6,0);
-		_velocity[0]=vx;
-		_velocity[1]=vy;
-		_velocity[2]=vz;
-		_velocity[3]=vroll;
-		_velocity[4]=vpitch;
-		_velocity[5]=vyaw;
-	}
 
 	const std::multimap<int, cv::Point3f> & getWords3() const {return _words3;}
 	const Transform & getPose() const {return _pose;}
 	cv::Mat getPoseCovariance() const;
 	const Transform & getGroundTruthPose() const {return _groundTruthPose;}
-	const std::vector<float> & getVelocity() const {return _velocity;}
 
 	SensorData & sensorData() {return _sensorData;}
 	const SensorData & sensorData() const {return _sensorData;}
@@ -153,11 +142,9 @@ private:
 	std::multimap<int, cv::Mat> _wordsDescriptors;
 	std::map<int, int> _wordsChanged; // <oldId, newId>
 	bool _enabled;
-	int _invalidWordsCount;
 
 	Transform _pose;
 	Transform _groundTruthPose;
-	std::vector<float> _velocity;
 
 	SensorData _sensorData;
 };

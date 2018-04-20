@@ -41,10 +41,6 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <map>
 #include <Eigen/Core>
 
-#if CV_MAJOR_VERSION >= 3
-#include <opencv2/photo/photo.hpp>
-#endif
-
 namespace rtabmap
 {
 
@@ -1147,30 +1143,28 @@ cv::Rect computeRoi(const cv::Size & imageSize, const std::vector<float> & roiRa
 		UDEBUG("roi = %d, %d, %d, %d", roi.x, roi.y, roi.width, roi.height);
 
 		//left roi
-		if(roiRatios[0] > 0 && roiRatios[0] < 1.0f - roiRatios[1])
+		if(roiRatios[0] > 0 && roiRatios[0] < 1 - roiRatios[1])
 		{
 			roi.x = width * roiRatios[0];
 		}
 
 		//right roi
-		if(roiRatios[1] > 0 && roiRatios[1] < 1.0f - roiRatios[0])
+		if(roiRatios[1] > 0 && roiRatios[1] < 1 - roiRatios[0])
 		{
-			roi.width -= width * roiRatios[1];
+			roi.width -= width * roiRatios[1] + width * roiRatios[0];
 		}
-		roi.width -= roi.x;
 
 		//top roi
-		if(roiRatios[2] > 0 && roiRatios[2] < 1.0f - roiRatios[3])
+		if(roiRatios[2] > 0 && roiRatios[2] < 1 - roiRatios[3])
 		{
 			roi.y = height * roiRatios[2];
 		}
 
 		//bottom roi
-		if(roiRatios[3] > 0 && roiRatios[3] < 1.0f - roiRatios[2])
+		if(roiRatios[3] > 0 && roiRatios[3] < 1 - roiRatios[2])
 		{
-			roi.height -= height * roiRatios[3];
+			roi.height -= height * roiRatios[3] + height * roiRatios[2];
 		}
-		roi.height -= roi.y;
 		UDEBUG("roi = %d, %d, %d, %d", roi.x, roi.y, roi.width, roi.height);
 
 		return roi;
@@ -1192,9 +1186,7 @@ cv::Mat decimate(const cv::Mat & image, int decimation)
 		{
 			if((image.type() == CV_32FC1 || image.type()==CV_16UC1))
 			{
-				UASSERT_MSG(image.rows % decimation == 0 && image.cols % decimation == 0,
-						uFormat("Decimation of depth images should be exact! (decimation=%d, size=%dx%d)",
-						decimation, image.cols, image.rows).c_str());
+				UASSERT_MSG(image.rows % decimation == 0 && image.cols % decimation == 0, "Decimation of depth images should be exact!");
 
 				out = cv::Mat(image.rows/decimation, image.cols/decimation, image.type());
 				if(image.type() == CV_32FC1)
@@ -1420,29 +1412,18 @@ cv::Mat registerDepth(
 	return registered;
 }
 
-cv::Mat fillDepthHoles(const cv::Mat & depth, int maximumHoleSize, float errorRatio)
+cv::Mat fillDepthHoles(const cv::Mat & registeredDepth, int maximumHoleSize, float errorRatio)
 {
-	UASSERT(depth.type() == CV_16UC1 || depth.type() == CV_32FC1);
+	UASSERT(registeredDepth.type() == CV_16UC1);
 	UASSERT(maximumHoleSize > 0);
-	cv::Mat output = depth.clone();
-	bool isMM = depth.type() == CV_16UC1;
-	for(int y=0; y<depth.rows-2; ++y)
+	cv::Mat output = registeredDepth.clone();
+	for(int y=0; y<registeredDepth.rows-2; ++y)
 	{
-		for(int x=0; x<depth.cols-2; ++x)
+		for(int x=0; x<registeredDepth.cols-2; ++x)
 		{
-			float a, bRight, bDown;
-			if(isMM)
-			{
-				a = depth.at<unsigned short>(y, x);
-				bRight = depth.at<unsigned short>(y, x+1);
-				bDown = depth.at<unsigned short>(y+1, x);
-			}
-			else
-			{
-				a = depth.at<float>(y, x);
-				bRight = depth.at<float>(y, x+1);
-				bDown = depth.at<float>(y+1, x);
-			}
+			float a = registeredDepth.at<unsigned short>(y, x);
+			float bRight = registeredDepth.at<unsigned short>(y, x+1);
+			float bDown = registeredDepth.at<unsigned short>(y+1, x);
 
 			if(a > 0.0f && (bRight == 0.0f || bDown == 0.0f))
 			{
@@ -1454,13 +1435,13 @@ cv::Mat fillDepthHoles(const cv::Mat & depth, int maximumHoleSize, float errorRa
 					// horizontal
 					if(!horizontalSet)
 					{
-						if(x+1+h >= depth.cols)
+						if(x+1+h >= registeredDepth.cols)
 						{
 							horizontalSet = true;
 						}
 						else
 						{
-							float c = isMM?depth.at<unsigned short>(y, x+1+h):depth.at<float>(y, x+1+h);
+							float c = registeredDepth.at<unsigned short>(y, x+1+h);
 							if(c == 0)
 							{
 								// ignore this size
@@ -1473,36 +1454,16 @@ cv::Mat fillDepthHoles(const cv::Mat & depth, int maximumHoleSize, float errorRa
 								{
 									//linear interpolation
 									float slope = (c-a)/float(h+1);
-									if(isMM)
+									for(int z=x+1; z<x+1+h; ++z)
 									{
-										for(int z=x+1; z<x+1+h; ++z)
+										if(output.at<unsigned short>(y, z) == 0)
 										{
-											unsigned short & value = output.at<unsigned short>(y, z);
-											if(value == 0)
-											{
-												value = (unsigned short)(a+(slope*float(z-x)));
-											}
-											else
-											{
-												// average with the previously set value
-												value = (value+(unsigned short)(a+(slope*float(z-x))))/2;
-											}
+											output.at<unsigned short>(y, z) = (unsigned short)(a+(slope*float(z-x)));
 										}
-									}
-									else
-									{
-										for(int z=x+1; z<x+1+h; ++z)
+										else
 										{
-											float & value = output.at<float>(y, z);
-											if(value == 0)
-											{
-												value = a+(slope*float(z-x));
-											}
-											else
-											{
-												// average with the previously set value
-												value = (value+(a+(slope*float(z-x))))/2;
-											}
+											// average with the previously set value
+											output.at<unsigned short>(y, z) = (output.at<unsigned short>(y, z)+(unsigned short)(a+(slope*float(z-x))))/2;
 										}
 									}
 								}
@@ -1515,13 +1476,13 @@ cv::Mat fillDepthHoles(const cv::Mat & depth, int maximumHoleSize, float errorRa
 					// vertical
 					if(!verticalSet)
 					{
-						if(y+1+h >= depth.rows)
+						if(y+1+h >= registeredDepth.rows)
 						{
 							verticalSet = true;
 						}
 						else
 						{
-							float c = isMM?depth.at<unsigned short>(y+1+h, x):depth.at<float>(y+1+h, x);
+							float c = registeredDepth.at<unsigned short>(y+1+h, x);
 							if(c == 0)
 							{
 								// ignore this size
@@ -1534,36 +1495,16 @@ cv::Mat fillDepthHoles(const cv::Mat & depth, int maximumHoleSize, float errorRa
 								{
 									//linear interpolation
 									float slope = (c-a)/float(h+1);
-									if(isMM)
+									for(int z=y+1; z<y+1+h; ++z)
 									{
-										for(int z=y+1; z<y+1+h; ++z)
+										if(output.at<unsigned short>(z, x) == 0)
 										{
-											unsigned short & value = output.at<unsigned short>(z, x);
-											if(value == 0)
-											{
-												value = (unsigned short)(a+(slope*float(z-y)));
-											}
-											else
-											{
-												// average with the previously set value
-												value = (value+(unsigned short)(a+(slope*float(z-y))))/2;
-											}
+											output.at<unsigned short>(z, x) = (unsigned short)(a+(slope*float(z-y)));
 										}
-									}
-									else
-									{
-										for(int z=y+1; z<y+1+h; ++z)
+										else
 										{
-											float & value = output.at<float>(z, x);
-											if(value == 0)
-											{
-												value = (a+(slope*float(z-y)));
-											}
-											else
-											{
-												// average with the previously set value
-												value = (value+(a+(slope*float(z-y))))/2;
-											}
+											// average with the previously set value
+											output.at<unsigned short>(z, x) = (output.at<unsigned short>(z, x)+(unsigned short)(a+(slope*float(z-y))))/2;
 										}
 									}
 								}
@@ -1913,109 +1854,6 @@ cv::Mat fastBilateralFiltering(const cv::Mat & depth, float sigmaS, float sigmaR
 
 	UDEBUG("End");
 	return output;
-}
-
-/**
- *  \brief Automatic brightness and contrast optimization with optional histogram clipping
- *  \param [in]src Input image GRAY or BGR or BGRA
- *  \param [out]dst Destination image
- *  \param clipHistPercent cut wings of histogram at given percent typical=>1, 0=>Disabled
- *  \note In case of BGRA image, we won't touch the transparency
- *  See http://answers.opencv.org/question/75510/how-to-make-auto-adjustmentsbrightness-and-contrast-for-image-android-opencv-image-correction/
-*/
-cv::Mat brightnessAndContrastAuto(const cv::Mat &src, const cv::Mat & mask, float clipLowHistPercent, float clipHighHistPercent)
-{
-
-    CV_Assert(clipLowHistPercent >= 0 && clipHighHistPercent>=0);
-    CV_Assert((src.type() == CV_8UC1) || (src.type() == CV_8UC3) || (src.type() == CV_8UC4));
-
-    int histSize = 256;
-    float alpha, beta;
-    double minGray = 0, maxGray = 0;
-
-    //to calculate grayscale histogram
-    cv::Mat gray;
-    if (src.type() == CV_8UC1) gray = src;
-    else if (src.type() == CV_8UC3) cvtColor(src, gray, CV_BGR2GRAY);
-    else if (src.type() == CV_8UC4) cvtColor(src, gray, CV_BGRA2GRAY);
-    if (clipLowHistPercent == 0 && clipHighHistPercent == 0)
-    {
-        // keep full available range
-        cv::minMaxLoc(gray, &minGray, &maxGray, 0, 0, mask);
-    }
-    else
-    {
-        cv::Mat hist; //the grayscale histogram
-
-        float range[] = { 0, 256 };
-        const float* histRange = { range };
-        bool uniform = true;
-        bool accumulate = false;
-        calcHist(&gray, 1, 0, mask, hist, 1, &histSize, &histRange, uniform, accumulate);
-
-        // calculate cumulative distribution from the histogram
-        std::vector<float> accumulator(histSize);
-        accumulator[0] = hist.at<float>(0);
-        for (int i = 1; i < histSize; i++)
-        {
-            accumulator[i] = accumulator[i - 1] + hist.at<float>(i);
-        }
-
-        // locate points that cuts at required value
-        float max = accumulator.back();
-        clipLowHistPercent *= (max / 100.0); //make percent as absolute
-        clipHighHistPercent *= (max / 100.0); //make percent as absolute
-        // locate left cut
-        minGray = 0;
-        while (accumulator[minGray] < clipLowHistPercent)
-            minGray++;
-
-        // locate right cut
-        maxGray = histSize - 1;
-        while (accumulator[maxGray] >= (max - clipHighHistPercent))
-            maxGray--;
-    }
-
-    // current range
-    float inputRange = maxGray - minGray;
-
-    alpha = (histSize - 1) / inputRange;   // alpha expands current range to histsize range
-    beta = -minGray * alpha;             // beta shifts current range so that minGray will go to 0
-
-    UINFO("minGray=%f maxGray=%f alpha=%f beta=%f", minGray, maxGray, alpha, beta);
-
-    cv::Mat dst;
-    // Apply brightness and contrast normalization
-    // convertTo operates with saurate_cast
-    src.convertTo(dst, -1, alpha, beta);
-
-    // restore alpha channel from source
-    if (dst.type() == CV_8UC4)
-    {
-        int from_to[] = { 3, 3};
-        cv::mixChannels(&src, 4, &dst,1, from_to, 1);
-    }
-    return dst;
-}
-
-cv::Mat exposureFusion(const std::vector<cv::Mat> & images)
-{
-	UASSERT(images.size());
-	cv::Mat fusion;
-#if CV_MAJOR_VERSION >= 3
-	cv::createMergeMertens()->process(images, fusion);
-	cv::Mat rgb8;
-	UASSERT(fusion.channels() == 3);
-	fusion.convertTo(rgb8, CV_8UC3, 255.0);
-	fusion = rgb8;
-#else
-	UWARN("Exposure fusion is only avaiable when rtabmap is built with OpenCV3.");
-	if (images.size())
-	{
-		fusion = images[0].clone();
-	}
-#endif
-	return fusion;
 }
 
 }

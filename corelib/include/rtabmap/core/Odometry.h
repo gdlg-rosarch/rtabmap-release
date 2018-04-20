@@ -45,11 +45,7 @@ public:
 	enum Type {
 		kTypeUndef = -1,
 		kTypeF2M = 0,
-		kTypeF2F = 1,
-		kTypeFovis = 2,
-		kTypeViso2 = 3,
-		kTypeDVO = 4,
-		kTypeORBSLAM2 = 5
+		kTypeF2F = 1
 	};
 
 public:

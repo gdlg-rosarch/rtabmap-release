@@ -22,14 +22,13 @@ SET(headers_ui
 	./ExportDialog.h
 	./PostProcessingDialog.h
 	./ExportCloudsDialog.h
+	./ExportScansDialog.h
 	./MapVisibilityWidget.h
 	../include/${PROJECT_PREFIX}/gui/GraphViewer.h
 	./CreateSimpleCalibrationDialog.h
 	./ParametersToolBox.h
 	./DepthCalibrationDialog.h
 	./3rdParty/QMultiComboBox.h
-	./TexturingState.h
-	./EditDepthArea.h
 )
 
 SET(uis
@@ -42,6 +41,7 @@ SET(uis
     ./ui/exportDialog.ui
     ./ui/postProcessingDialog.ui
     ./ui/exportCloudsDialog.ui
+    ./ui/exportScansDialog.ui
     ./ui/calibrationDialog.ui
     ./ui/createSimpleCalibrationDialog.ui
     ./ui/depthCalibrationDialog.ui
@@ -89,14 +89,13 @@ SET(SRC_FILES
 	./ExportDialog.cpp
 	./PostProcessingDialog.cpp
 	./ExportCloudsDialog.cpp
+	./ExportScansDialog.cpp
 	./MapVisibilityWidget.cpp
 	./GraphViewer.cpp
-	./EditDepthArea.cpp
 	./CreateSimpleCalibrationDialog.cpp
 	./ParametersToolBox.cpp
 	./DepthCalibrationDialog.cpp
 	./3rdParty/QMultiComboBox.cpp
-	./opencv/vtkImageMatSource.cpp
 	
 	${moc_srcs} 
 	${moc_uis} 
@@ -134,17 +133,6 @@ IF(OCTOMAP_FOUND)
 	)
 ENDIF(OCTOMAP_FOUND)
 
-IF(CPUTSDF_FOUND)
-	SET(INCLUDE_DIRS
-		${INCLUDE_DIRS}
-		${CPUTSDF_INCLUDE_DIRS}
-	)
-	SET(LIBRARIES
-		${LIBRARIES}
-		${CPUTSDF_LIBRARIES}
-	)
-ENDIF(CPUTSDF_FOUND)
-
 IF(VTK_USE_QVTK)
 	SET(INCLUDE_DIRS ${INCLUDE_DIRS} ${QVTK_INCLUDE_DIR})
 	SET(LIBRARIES ${LIBRARIES} ${QVTK_LIBRARY})
@@ -161,11 +149,7 @@ ADD_LIBRARY(rtabmap_gui ${SRC_FILES})
 
 TARGET_LINK_LIBRARIES(rtabmap_gui rtabmap_core rtabmap_utilite ${LIBRARIES})
 IF(Qt5_FOUND)
-    IF(Qt5Svg_FOUND)
-        QT5_USE_MODULES(rtabmap_gui Widgets Core Gui Svg PrintSupport)
-    ELSE()
-        QT5_USE_MODULES(rtabmap_gui Widgets Core Gui PrintSupport)
-    ENDIF()
+    QT5_USE_MODULES(rtabmap_gui Widgets Core Gui Svg PrintSupport)
 ENDIF(Qt5_FOUND)
 
 SET_TARGET_PROPERTIES(

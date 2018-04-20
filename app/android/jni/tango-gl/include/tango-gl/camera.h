@@ -27,17 +27,11 @@ class Camera : public Transform {
   Camera& operator=(const Camera&) = delete;
   ~Camera();
 
-  void SetWindowSize(const float width, const float height);
+  void SetAspectRatio(const float aspect_ratio);
   void SetFieldOfView(const float fov);
-  void SetOrthoMode(bool enabled) {ortho_ = enabled;}
-  void SetOrthoScale(float scale) {orthoScale_ = scale;}
-  void SetOrthoCropFactor(float value) {orthoCropFactor_ = value;}
-  void SetNearFarClipPlanes(const float near, const float far);
 
   glm::mat4 GetViewMatrix();
   glm::mat4 GetProjectionMatrix();
-  float getNearClipPlane() const {return near_clip_plane_;}
-  float getFarClipPlane() const {return far_clip_plane_;}
 
   /**
    * Create an OpenGL perspective matrix from window size, camera intrinsics, and clip settings.
@@ -58,12 +52,7 @@ class Camera : public Transform {
  protected:
   float field_of_view_;
   float aspect_ratio_;
-  float width_;
-  float height_;
   float near_clip_plane_, far_clip_plane_;
-  bool ortho_;
-  float orthoScale_;
-  float orthoCropFactor_;
 };
 }  // namespace tango_gl
 #endif  // TANGO_GL_CAMERA_H_

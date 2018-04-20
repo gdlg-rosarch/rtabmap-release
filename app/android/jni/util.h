@@ -44,14 +44,14 @@ class LogHandler : public UEventsHandler
 public:
 	LogHandler()
 	{
-		ULogger::setLevel(ULogger::kDebug);
-		ULogger::setEventLevel(ULogger::kDebug);
+		ULogger::setLevel(ULogger::kWarning);
+		ULogger::setEventLevel(ULogger::kWarning);
 		ULogger::setPrintThreadId(true);
 
 		registerToEventsManager();
 	}
 protected:
-	virtual bool handleEvent(UEvent * event)
+	virtual void handleEvent(UEvent * event)
 	{
 		if(event->getClassName().compare("ULogEvent") == 0)
 		{
@@ -74,7 +74,6 @@ protected:
 			}
 
 		}
-		return false;
 	}
 };
 
@@ -144,33 +143,15 @@ inline rtabmap::Transform glmToTransform(const glm::mat4 & mat)
 	return transform;
 }
 
-class Mesh
+struct Mesh
 {
-public:
-	Mesh() :
-		cloud(new pcl::PointCloud<pcl::PointXYZRGB>),
-		normals(new pcl::PointCloud<pcl::Normal>),
-		indices(new std::vector<int>),
-		visible(true)
-	{
-		gains[0] = gains[1] = gains[2] = 1.0f;
-	}
-
 	pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud; // organized cloud
-	pcl::PointCloud<pcl::Normal>::Ptr normals;
 	pcl::IndicesPtr indices;
 	std::vector<pcl::Vertices> polygons;
-	std::vector<pcl::Vertices> polygonsLowRes;
 	rtabmap::Transform pose; // in rtabmap coordinates
 	bool visible;
 	rtabmap::CameraModel cameraModel;
-	double gains[3]; // RGB gains
-#if PCL_VERSION_COMPARE(>=, 1, 8, 0)
-    	std::vector<Eigen::Vector2f, Eigen::aligned_allocator<Eigen::Vector2f> > texCoords;
-#else
-    	std::vector<Eigen::Vector2f> texCoords;
-#endif
-	cv::Mat texture;
+	float gain;
 };
 
 #endif /* UTIL_H_ */
